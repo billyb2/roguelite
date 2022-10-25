@@ -6,7 +6,10 @@ mod input;
 mod math;
 mod draw;
 
-use std::fs;
+use std::{
+    fs, 
+    collections::HashMap
+};
 
 use attack::update_attacks;
 use player::*;
@@ -19,12 +22,25 @@ use macroquad::prelude::*;
 async fn main() {
     let mut players = vec![Player::new()];
     let mut attacks = Vec::new();
-    let image_bytes = fs::read("swipe.webp").unwrap();
-    let texture = Texture2D::from_file_with_format(&image_bytes, Some(ImageFormat::WebP));
+    let mut textures = HashMap::new();
+
+    fs::read_dir("assets").unwrap().for_each(|file| {
+        if let Ok(file) = file {
+            let file_name = file.file_name().to_str().unwrap().to_string();
+
+            let image_bytes = fs::read(file.path()).unwrap();
+            let texture = Texture2D::from_file_with_format(&image_bytes, Some(ImageFormat::WebP));
+
+            textures.insert(file_name, texture);
+
+
+        }
+
+    });
 
     loop {
         // Logic
-        keyboard_input(&mut players[0], &mut attacks, texture);
+        keyboard_input(&mut players[0], &mut attacks, &textures);
         update_cooldowns(&mut players);
         update_attacks(&mut attacks);
 

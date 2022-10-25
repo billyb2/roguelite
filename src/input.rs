@@ -1,10 +1,12 @@
+use std::collections::HashMap;
+
 use crate::{
     player::{Player, move_player}, 
-    attack::{Attack, player_attack}, math::get_angle,
+    attack::{Attack, player_attack, AttackType}, math::get_angle,
 };
 use macroquad::prelude::*;
 
-pub fn keyboard_input(player: &mut Player, attacks: &mut Vec<Attack>, texture: Texture2D) {
+pub fn keyboard_input(player: &mut Player, attacks: &mut Vec<Attack>, textures: &HashMap<String, Texture2D>) {
     let mut x_movement: f32 = 0.0;
     let mut y_movement: f32 = 0.0;
 
@@ -34,7 +36,21 @@ pub fn keyboard_input(player: &mut Player, attacks: &mut Vec<Attack>, texture: T
 
         let angle = get_angle(mouse_pos.0, mouse_pos.1, player_pos.x, player_pos.y);
 
-        player_attack(player, attacks, angle, Some(texture));
+        let texture = textures.get("swipe.webp").unwrap();
+
+        player_attack(player, AttackType::Primary, attacks, angle, Some(*texture));
+
+    }
+
+    if is_mouse_button_down(MouseButton::Right) {
+        let player_pos = player.pos();
+        let mouse_pos = mouse_position();
+
+        let angle = get_angle(mouse_pos.0, mouse_pos.1, player_pos.x, player_pos.y);
+
+        let texture = textures.get("stab.webp").unwrap();
+
+        player_attack(player, AttackType::Secondary, attacks, angle, Some(*texture));
 
     }
 
