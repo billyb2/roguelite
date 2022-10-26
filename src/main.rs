@@ -4,6 +4,7 @@ mod player;
 mod attack;
 mod input;
 mod math;
+mod map;
 mod draw;
 
 use std::{
@@ -12,6 +13,7 @@ use std::{
 };
 
 use attack::update_attacks;
+use map::*;
 use player::*;
 use draw::*;
 use input::*;
@@ -20,7 +22,6 @@ use macroquad::prelude::*;
 
 #[macroquad::main("roguelite")]
 async fn main() {
-    let mut players = vec![Player::new()];
     let mut attacks = Vec::new();
     let mut textures = HashMap::new();
 
@@ -33,22 +34,32 @@ async fn main() {
 
             textures.insert(file_name, texture);
 
-
         }
 
     });
+    
+    let map = Map::new(&textures);
+    let mut players = vec![Player::new(map.current_spawn())];
 
     loop {
         // Logic
-        keyboard_input(&mut players[0], &mut attacks, &textures);
+        keyboard_input(&mut players[0], &mut attacks, &textures, &map);
         update_cooldowns(&mut players);
         update_attacks(&mut attacks);
 
         // Rendering
         clear_background(WHITE);
 
+        set_camera(&Camera2D {
+            target: players[0].pos(),
+            zoom: Vec2::new(0.005, 0.005 * (screen_width() / screen_height())),
+            ..Default::default()
+        });
+
         players.iter().for_each(|p| p.draw());
         attacks.iter().for_each(|a| a.draw());
+
+        map.draw();
 
         next_frame().await
     }

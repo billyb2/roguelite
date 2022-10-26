@@ -68,8 +68,8 @@ pub fn player_attack(player: &mut Player, attack_type: AttackType, attacks: &mut
 
     let (size, attack_cooldown) = match player.class() {
         PlayerClass::Warrior => match attack_type {
-            AttackType::Primary => (Vec2::new(30.0, 50.0), 20),
-            AttackType::Secondary => (Vec2::new(50.0, 10.0), 45),
+            AttackType::Primary => (Vec2::new(15.0, 25.0), 20),
+            AttackType::Secondary => (Vec2::new(25.0, 5.0), 45),
 
         }
     };
@@ -87,8 +87,8 @@ pub fn update_attacks(attacks: &mut Vec<Attack>) {
             PlayerClass::Warrior => {
                 let direction: Vec2 = Vec2::new(attack.angle.cos(), attack.angle.sin());
                 attack.pos += direction * match attack.attack_type {
-                    AttackType::Primary => 10.0,
-                    AttackType::Secondary => 16.0,
+                    AttackType::Primary => 5.0,
+                    AttackType::Secondary => 9.0,
 
                 };
                 
