@@ -24,9 +24,17 @@ pub fn get_angle(cx: f32, cy: f32, ex: f32, ey: f32) -> f32 {
     
 }
 
+#[derive(Clone)]
 pub struct AxisAlignedBoundingBox {
     pub pos: Vec2,
     pub size: Vec2,
+
+}
+
+impl AsAABB for AxisAlignedBoundingBox {
+    fn as_aabb(&self) -> AxisAlignedBoundingBox {
+        self.clone()
+    }
 
 }
 

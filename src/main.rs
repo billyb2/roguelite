@@ -11,7 +11,7 @@ mod draw;
 
 use std::{
     fs, 
-    collections::HashMap
+    collections::HashMap, f32::consts::PI
 };
 
 use attack::update_attacks;
@@ -46,29 +46,32 @@ async fn main() {
     let map = Map::new(&textures, &mut monsters);
     let mut players = vec![Player::new(map.current_spawn())];
 
+    let mut camera = Camera2D {
+        target: players[0].pos(),
+        zoom: Vec2::new(0.005, -0.005 * (screen_width() / screen_height())),
+        ..Default::default()
+    };
+
     loop {
         // Logic
         keyboard_input(&mut players[0], &mut attacks, &textures, &map);
         update_cooldowns(&mut players);
-        update_attacks(&mut attacks);
-        //update_monsters(&mut monsters, &mut players, &map);
+        update_attacks(&mut attacks, &mut players, &mut monsters, &map);
+        update_monsters(&mut monsters, &mut players, &map);
+
+        camera.target = players[0].pos();
 
         // Rendering
         clear_background(WHITE);
 
-        set_camera(&Camera2D {
-            target: players[0].pos(),
-            zoom: Vec2::new(0.005, 0.005 * (screen_width() / screen_height())),
-            ..Default::default()
-        });
+//        /*
+        set_camera(&camera);
+//        */
 
         map.draw();
         monsters.iter().for_each(|m| m.draw());
         attacks.iter().for_each(|a| a.draw());
         players.iter().for_each(|p| p.draw());
-
-
-        update_monsters(&mut monsters, &mut players, &map);
 
         next_frame().await
     }

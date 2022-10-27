@@ -1,28 +1,50 @@
 use std::collections::HashMap;
 
 use crate::{
-    player::Player,
+    player::{Player, damage_player},
     monsters::Monster,
-    math::{AsAABB, AxisAlignedBoundingBox, get_angle}, 
+    math::{AsAABB, AxisAlignedBoundingBox, get_angle, aabb_collision}, 
     draw::Drawable, map::{Map, TILE_SIZE},
 };
 use macroquad::{prelude::*, rand::ChooseRandom};
 
 enum AttackMode {
     Passive,
+    Attacking,
 
 }
 
+#[derive(Copy, Clone)]
+enum Target {
+    Pos(Vec2),
+    PlayerIndex(usize),
+
+}
+
+impl Target {
+    fn unwrap_pos(self) -> Vec2 {
+        match self {
+            Self::Pos(v) => v,
+            _ => panic!(),
+
+        }
+
+    }
+
+}
+
+const SIZE: f32 = 15.0;
+
 pub struct SmallRat {
+    health: f32,
     pos: Vec2,
-    size: Vec2,
     texture: Texture2D,
     attack_mode: AttackMode,
-    time_spent_wandering: u16,
-    time_til_wander: u16,
+    time_spent_moving: u16,
+    time_til_move: u16,
     current_path: Option<(Vec<Vec2>, usize)>,
     // Gotta keep track of if the target moved, to reset the path
-    current_target: Option<Vec2>,
+    current_target: Option<Target>,
 
 }
 
@@ -43,12 +65,12 @@ impl Monster for SmallRat {
 
         Self {
             pos,
-            size: Vec2::splat(15.0),
+            health: 35.0,
             texture: *textures.get("generic_monster.webp").unwrap(),
             attack_mode: AttackMode::Passive,
             // 3.0 seconds at 60 fps
-            time_til_wander: 0,
-            time_spent_wandering: 0,
+            time_til_move: 0,
+            time_spent_moving: 0,
             current_path: None,
             current_target: None,
 
@@ -59,16 +81,46 @@ impl Monster for SmallRat {
     fn ai(&mut self, players: &mut [Player], map: &Map) {
         match self.attack_mode {
             AttackMode::Passive => passive_mode(self, players, map),
+            AttackMode::Attacking => attack_mode(self, players, map),
+
+        };
+
+        players.iter_mut().for_each(|p| {
+            if aabb_collision(p, self, Vec2::ZERO) {
+                const DAMAGE: f32 = 20.0;
+                let damage_direction = get_angle(p.pos().x, p.pos().y, self.pos.x, self.pos.y);
+
+                damage_player(p, DAMAGE, damage_direction, map);
+
+            }
+
+        });
+
+    }
+
+    fn take_damage(&mut self, damaging_player: usize, players: &mut [Player], damage: f32, map: &Map) {
+        self.health -= damage;
+
+        if self.health < 0.0 {
+            self.health = 0.0;
 
         }
 
     }
 
+    fn living(&self) -> bool {
+        self.health > 0.0
+    }
+
+
 }
+
+
+const AGGRO_DISTANCE: f32 = (TILE_SIZE * 4) as f32;
 
 // The rat just wanders around a lil in passive mode
 fn passive_mode(my_monster: &mut SmallRat, players: &mut [Player], map: &Map) {
-    my_monster.time_til_wander = my_monster.time_til_wander.saturating_sub(1);
+    my_monster.time_til_move = my_monster.time_til_move.saturating_sub(1);
 
     let find_target = || -> Vec2 {
         *map.current_room().background_objects().iter().filter_map(|o| {
@@ -85,18 +137,18 @@ fn passive_mode(my_monster: &mut SmallRat, players: &mut [Player], map: &Map) {
     };
 
     if my_monster.current_target.is_none() {
-        my_monster.current_target = Some(find_target());
+        my_monster.current_target = Some(Target::Pos(find_target()));
 
     }
 
 
-    if my_monster.time_til_wander == 0 {
+    if my_monster.time_til_move == 0 {
         if my_monster.current_path.is_none() {
-            if let Some(path) = map.find_path(my_monster.pos, my_monster.current_target.unwrap()) {
+            if let Some(path) = map.find_path(my_monster, my_monster.current_target.as_ref().unwrap().unwrap_pos()) {
                 my_monster.current_path = Some((path, 1));
 
             } else {
-                my_monster.current_target = Some(find_target());
+                my_monster.current_target = Some(Target::Pos(find_target()));
 
 
             }
@@ -119,22 +171,115 @@ fn passive_mode(my_monster: &mut SmallRat, players: &mut [Player], map: &Map) {
             } else {
                 my_monster.current_path = None; 
                 my_monster.current_target = None;
-                my_monster.time_til_wander = rand::gen_range(120_u32, 240).try_into().unwrap();
+                my_monster.time_til_move = rand::gen_range(120_u32, 240).try_into().unwrap();
 
             }
 
         }
 
     }
+
+    // If the rat gets within a few tiles of a player, it'll start attack mode
+
+    if let Some((i, _)) = players.iter().enumerate().find(|(_, p)| p.pos().distance(my_monster.pos) <= AGGRO_DISTANCE) {
+        my_monster.time_til_move = 30;
+        my_monster.time_spent_moving = 0;
+
+        my_monster.attack_mode = AttackMode::Attacking;
+        my_monster.current_target = Some(Target::PlayerIndex(i));
+
+    }
     
 
+}
+
+
+fn attack_mode(my_monster: &mut SmallRat, players: &mut [Player], map: &Map) {
+    if let Some(Target::PlayerIndex(i)) = my_monster.current_target {
+        my_monster.time_til_move = my_monster.time_til_move.saturating_sub(1);
+
+        if my_monster.time_til_move > 0 {
+            return;
+
+        }
+
+        let mut target_player = &players[i];
+
+        // First, check the targeted player is still within aggro distance
+        let mut distance_from_target = target_player.pos().distance(my_monster.pos);
+        let target_in_aggro_range = distance_from_target <= AGGRO_DISTANCE;
+
+        // If it isn't, try to see if there's anohter player within aggro range
+        if !target_in_aggro_range {
+            if let Some((i, p, distance)) = players.iter().enumerate().find_map(|(_, p)| {
+                let distance_from_target = p.pos().distance(my_monster.pos);
+
+                match distance_from_target <= AGGRO_DISTANCE {
+                    true => Some((i, p, distance_from_target)),
+                    false => None,
+
+                }
+
+            }) {
+                my_monster.current_target = Some(Target::PlayerIndex(i));
+                target_player = p;
+                distance_from_target = distance;
+
+            } else {
+                // No players were found in range, just return to passive mode
+                my_monster.current_target = None;
+                my_monster.attack_mode = AttackMode::Passive;
+                return;
+
+            }
+
+        }
+
+        // We now have a player to target, so find the quickest path to get to them
+        if my_monster.current_path.is_none() {
+            if let Some(path) = map.find_path(my_monster, target_player.pos()) {
+                my_monster.current_path = Some((path, 1));
+
+            }
+
+        }
+
+        if let Some((path, i)) = &mut my_monster.current_path {
+            if let Some(pos) = path.get(*i) {
+                if my_monster.pos.distance(*pos) < 2.0 {
+                    *i += 1;
+
+                } else {
+                    let angle = get_angle(pos.x, pos.y, my_monster.pos.x, my_monster.pos.y);
+                    my_monster.pos += Vec2::new(angle.cos(), angle.sin());
+
+                }
+
+
+            } else if let Some(path) = map.find_path(my_monster, target_player.pos()) {
+                my_monster.current_path = Some((path, 1));
+
+            }
+
+        }
+
+        // When the monster's within range of the player, "lunge" at them
+        if distance_from_target <= SIZE * 1.5 {
+            let angle = get_angle(target_player.pos().x, target_player.pos().y, my_monster.pos.x, my_monster.pos.y);
+            my_monster.pos += Vec2::new(angle.cos(), angle.sin()) * SIZE;
+            my_monster.time_til_move = 45;
+
+        }
+
+    }
+    
 }
 
 impl AsAABB for SmallRat {
     fn as_aabb(&self) -> AxisAlignedBoundingBox {
         AxisAlignedBoundingBox {
             pos: self.pos,
-            size: self.size,
+            size: self.size(),
 
         }
     }
@@ -149,7 +294,11 @@ impl Drawable for SmallRat {
     }
 
     fn size(&self) -> Vec2 {
-        self.size
+        match self.attack_mode {
+            AttackMode::Attacking => Vec2::splat(SIZE * 1.1),
+            _ => Vec2::splat(SIZE),
+
+        }
     }
 
     fn texture(&self) -> Option<Texture2D> {

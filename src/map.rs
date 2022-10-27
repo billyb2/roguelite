@@ -175,7 +175,10 @@ impl Map {
 
     }
 
-    pub fn find_path(&self, start: Vec2, goal: Vec2) -> Option<Vec<Vec2>> {
+    pub fn find_path(&self, pos: &dyn AsAABB, goal: Vec2) -> Option<Vec<Vec2>> {
+        let aabb = pos.as_aabb();
+        let start = aabb.pos + (aabb.size / Vec2::splat(2.0));
+
         // First, try to find the tile the starting position is in
         let start_tile = (start / Vec2::splat(TILE_SIZE as f32)).floor();
         let goal_tile = (goal / Vec2::splat(TILE_SIZE as f32)).floor();

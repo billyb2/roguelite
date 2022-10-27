@@ -20,7 +20,6 @@ pub trait Drawable {
                 let texture_params = DrawTextureParams {
                     rotation: self.rotation(),
                     flip_x: true,
-                    flip_y: true,
                     dest_size: Some(size),
                     ..Default::default()
 

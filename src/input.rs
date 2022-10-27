@@ -11,12 +11,12 @@ pub fn keyboard_input(player: &mut Player, attacks: &mut Vec<Attack>, textures: 
     let mut y_movement: f32 = 0.0;
 
     if is_key_down(KeyCode::W) {
-        y_movement += 1.0;
+        y_movement -= 1.0;
 
     }
 
     if is_key_down(KeyCode::S) {
-        y_movement -= 1.0;
+        y_movement += 1.0;
 
     }
 
@@ -31,31 +31,28 @@ pub fn keyboard_input(player: &mut Player, attacks: &mut Vec<Attack>, textures: 
     }
 
     if is_mouse_button_down(MouseButton::Left) {
-        let mut mouse_pos = mouse_position_local();
-        mouse_pos.y *= -1.0;
-
+        let mouse_pos = mouse_position_local();
         let angle = get_angle(mouse_pos.x, mouse_pos.y, 0.0, 0.0);
+
         let texture = textures.get("swipe.webp").unwrap();
 
-        player_attack(player, AttackType::Primary, attacks, angle, Some(*texture));
+        player_attack(player, 0, AttackType::Primary, attacks, angle, Some(*texture));
 
     }
 
     if is_mouse_button_down(MouseButton::Right) {
-        let mut mouse_pos = mouse_position_local();
-        mouse_pos.y *= -1.0;
-
+        let mouse_pos = mouse_position_local();
         let angle = get_angle(mouse_pos.x, mouse_pos.y, 0.0, 0.0);
 
         let texture = textures.get("stab.webp").unwrap();
 
-        player_attack(player, AttackType::Secondary, attacks, angle, Some(*texture));
+        player_attack(player, 0, AttackType::Secondary, attacks, angle, Some(*texture));
 
     }
 
     if x_movement != 0.0 || y_movement != 0.0 {
         let angle = y_movement.atan2(x_movement);
-        move_player(player, angle, map)
+        move_player(player, angle, None, map)
 
     }
 
