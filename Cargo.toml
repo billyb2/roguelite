@@ -7,3 +7,5 @@ edition = "2021"
 macroquad = { version = "0.3", default-features = false }
 here_be_dragons = { version = "0.2", default-features = false }
 image = { version = "*", default-features = false, features = ["webp"] }
+pathfinding = { version = "3", default-features = false }
+ordered-float = { version = "3", default-features = false }

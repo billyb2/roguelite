@@ -12,7 +12,7 @@ pub fn get_angle(cx: f32, cy: f32, ex: f32, ey: f32) -> f32 {
         true => (dy / dx).atan(),
         false => match dy > 0.0 {
             true => FRAC_PI_2, 
-            false => PI,
+            false => FRAC_PI_2,
         },
     };
 
@@ -50,7 +50,7 @@ pub trait AsAABB {
     fn as_aabb(&self) -> AxisAlignedBoundingBox;
 }
 
-pub fn aabb_collision(aabb1: &dyn AsAABB, aabb2: &dyn AsAABB, mut distance: Vec2) -> bool {
+pub fn aabb_collision(aabb1: &dyn AsAABB, aabb2: &dyn AsAABB, distance: Vec2) -> bool {
     const TWO: Vec2 = Vec2::splat(2.0);
 
     let mut obj1 = aabb1.as_aabb();
@@ -58,8 +58,8 @@ pub fn aabb_collision(aabb1: &dyn AsAABB, aabb2: &dyn AsAABB, mut distance: Vec2
 
     obj1.pos += distance;
 
-    let half_obj1_size = obj1.size / 2.0;
-    let half_obj2_size = obj2.size / 2.0;
+    let half_obj1_size = obj1.size / TWO;
+    let half_obj2_size = obj2.size / TWO;
 
     let obj1_min = obj1.pos - half_obj1_size;
     let obj1_max = obj1.pos + half_obj1_size;

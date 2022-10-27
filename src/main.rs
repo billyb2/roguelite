@@ -1,10 +1,12 @@
 #![feature(drain_filter)]
+#![feature(const_fn_floating_point_arithmetic)]
 
 mod player;
 mod attack;
 mod input;
 mod math;
 mod map;
+mod monsters;
 mod draw;
 
 use std::{
@@ -17,6 +19,7 @@ use map::*;
 use player::*;
 use draw::*;
 use input::*;
+use monsters::*;
 
 use macroquad::prelude::*;
 
@@ -38,7 +41,9 @@ async fn main() {
 
     });
     
-    let map = Map::new(&textures);
+    let mut monsters: Vec<Box<dyn Monster>> = Vec::new();
+
+    let map = Map::new(&textures, &mut monsters);
     let mut players = vec![Player::new(map.current_spawn())];
 
     loop {
@@ -46,6 +51,7 @@ async fn main() {
         keyboard_input(&mut players[0], &mut attacks, &textures, &map);
         update_cooldowns(&mut players);
         update_attacks(&mut attacks);
+        //update_monsters(&mut monsters, &mut players, &map);
 
         // Rendering
         clear_background(WHITE);
@@ -56,10 +62,13 @@ async fn main() {
             ..Default::default()
         });
 
-        players.iter().for_each(|p| p.draw());
-        attacks.iter().for_each(|a| a.draw());
-
         map.draw();
+        monsters.iter().for_each(|m| m.draw());
+        attacks.iter().for_each(|a| a.draw());
+        players.iter().for_each(|p| p.draw());
+
+
+        update_monsters(&mut monsters, &mut players, &map);
 
         next_frame().await
     }

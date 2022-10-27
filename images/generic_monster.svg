@@ -8,8 +8,8 @@
    version="1.1"
    id="svg5"
    inkscape:version="1.2.1 (9c6d41e410, 2022-07-14, custom)"
-   sodipodi:docname="sad_face.svg"
-   inkscape:export-filename="sad_face.webp"
+   sodipodi:docname="generic_monster.svg"
+   inkscape:export-filename="../assets/generic_monster.webp"
    inkscape:export-xdpi="96"
    inkscape:export-ydpi="96"
    xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
@@ -27,9 +27,9 @@
      inkscape:deskcolor="#d1d1d1"
      inkscape:document-units="mm"
      showgrid="false"
-     inkscape:zoom="2.2671892"
-     inkscape:cx="74.982714"
-     inkscape:cy="114.23837"
+     inkscape:zoom="4.6759914"
+     inkscape:cx="104.14904"
+     inkscape:cy="85.543356"
      inkscape:window-width="1920"
      inkscape:window-height="1007"
      inkscape:window-x="0"
@@ -42,9 +42,23 @@
      inkscape:label="Layer 1"
      inkscape:groupmode="layer"
      id="layer1">
+    <circle
+       style="fill:#a2f8ff;fill-opacity:1;stroke-width:0.264034"
+       id="path340"
+       cx="4.6302085"
+       cy="4.6302085"
+       r="4.6302085" />
     <path
-       id="rect234"
-       style="fill:#000000;fill-opacity:1;stroke-width:0.00346115"
-       d="m 0,0.00895157 c 0,0.08521059 0,0.17042117 0,0.25563176 0.08819444,0 0.17638889,0 0.26458333,0 0,-0.0881944 0,-0.17638889 0,-0.26458333 C 0.17638889,0 0.08819444,0 0,0 0,0.00298386 0,0.00596771 0,0.00895157 Z" />
+       style="fill:#000000;fill-opacity:1;stroke-width:0.264034"
+       id="path2196"
+       sodipodi:type="arc"
+       sodipodi:cx="4.5172763"
+       sodipodi:cy="2.8797636"
+       sodipodi:rx="1.8069108"
+       sodipodi:ry="0.95992136"
+       sodipodi:start="0"
+       sodipodi:end="3.0610947"
+       sodipodi:arc-type="slice"
+       d="M 6.324187,2.8797636 A 1.8069108,0.95992136 0 0 1 4.589983,3.8389075 1.8069108,0.95992136 0 0 1 2.7162167,2.9569519 l 1.8010596,-0.077188 z" />
   </g>
 </svg>

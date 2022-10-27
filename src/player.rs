@@ -1,5 +1,9 @@
-use macroquad::{math::Vec2, shapes::draw_rectangle, prelude::{BLACK, YELLOW}};
-use crate::{draw::Drawable, attack::Attack, map::Map, math::{AsAABB, AxisAlignedBoundingBox}};
+use macroquad::prelude::*;
+use crate::{
+    draw::Drawable, 
+    map::Map, 
+    math::{AsAABB, AxisAlignedBoundingBox}
+};
 
 pub const PLAYER_SIZE: f32 = 12.0;
 
@@ -67,8 +71,6 @@ impl Drawable for Player {
 pub fn move_player(player: &mut Player, angle: f32, map: &Map) {
     let direction: Vec2 = (angle.cos(), angle.sin()).into();
     let distance = direction * player.speed;
-    let old_pos = player.pos;
-
 
     if !map.collision(player, distance) {
         player.pos += distance;
