@@ -98,7 +98,7 @@ impl Monster for SmallRat {
 
     }
 
-    fn take_damage(&mut self, damaging_player: usize, players: &mut [Player], damage: f32, map: &Map) {
+    fn take_damage(&mut self, damage: f32, _map: &Map) {
         self.health -= damage;
 
         if self.health < 0.0 {

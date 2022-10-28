@@ -2,7 +2,7 @@ use macroquad::prelude::*;
 use crate::{
     draw::Drawable, 
     map::Map, 
-    math::{AsAABB, AxisAlignedBoundingBox}
+    math::{AsAABB, AxisAlignedBoundingBox}, attacks::Attack
 };
 
 pub const PLAYER_SIZE: f32 = 12.0;
@@ -15,11 +15,13 @@ pub enum PlayerClass {
 
 pub struct Player {
     class: PlayerClass,
+    pub angle: f32,
     pos: Vec2,
     speed: f32,
     health: f32,
     invincibility_frames: u16, 
     pub attack_cooldown: u16,
+    pub attacks: Vec<Box<dyn Attack>>,
 
 }
 
@@ -27,11 +29,13 @@ impl Player {
     pub fn new(pos: Vec2) -> Self {
         Self {
             pos,
+            angle: 0.0,
             class: PlayerClass::Warrior,
             speed: 2.2,
             attack_cooldown: 0,
             health: 100.0,
             invincibility_frames: 0,
+            attacks: Vec::with_capacity(2),
         }
     }
 

@@ -2,7 +2,7 @@
 #![feature(const_fn_floating_point_arithmetic)]
 
 mod player;
-mod attack;
+mod attacks;
 mod input;
 mod math;
 mod map;
@@ -14,7 +14,7 @@ use std::{
     collections::HashMap, f32::consts::PI
 };
 
-use attack::update_attacks;
+use attacks::*;
 use map::*;
 use player::*;
 use draw::*;
@@ -25,7 +25,6 @@ use macroquad::prelude::*;
 
 #[macroquad::main("roguelite")]
 async fn main() {
-    let mut attacks = Vec::new();
     let mut textures = HashMap::new();
 
     fs::read_dir("assets").unwrap().for_each(|file| {
@@ -54,9 +53,9 @@ async fn main() {
 
     loop {
         // Logic
-        keyboard_input(&mut players[0], &mut attacks, &textures, &map);
+        keyboard_input(&mut players[0], &textures, &map);
         update_cooldowns(&mut players);
-        update_attacks(&mut attacks, &mut players, &mut monsters, &map);
+        update_attacks(&mut players, &mut monsters, &map);
         update_monsters(&mut monsters, &mut players, &map);
 
         camera.target = players[0].pos();
@@ -70,7 +69,7 @@ async fn main() {
 
         map.draw();
         monsters.iter().for_each(|m| m.draw());
-        attacks.iter().for_each(|a| a.draw());
+        players.iter().flat_map(|p| p.attacks.iter()).for_each(|a| a.draw());
         players.iter().for_each(|p| p.draw());
 
         next_frame().await

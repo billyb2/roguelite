@@ -17,7 +17,7 @@ pub use small_rat::*;
 pub trait Monster: AsAABB + Drawable {
     fn new(textures: &HashMap<String, Texture2D>, map: &Map) -> Self where Self: Sized;
     fn ai(&mut self, players: &mut [Player], map: &Map);
-    fn take_damage(&mut self, damaging_player: usize, players: &mut [Player], damage: f32, map: &Map);
+    fn take_damage(&mut self, damage: f32, map: &Map);
     fn living(&self) -> bool;
     fn into_aabb_obj(&self) -> AxisAlignedBoundingBox{
         self.as_aabb()
