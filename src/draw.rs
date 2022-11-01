@@ -12,8 +12,8 @@ pub trait Drawable {
 
     }
     fn draw(&self) {
-        let pos = self.pos();
         let size = self.size();
+        let pos = self.pos() - (size * Vec2::splat(0.25));
         
         match self.texture() {
             Some(texture) => {
