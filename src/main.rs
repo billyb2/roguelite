@@ -1,6 +1,3 @@
-#![feature(drain_filter)]
-#![feature(const_fn_floating_point_arithmetic)]
-
 mod player;
 mod attacks;
 mod input;
@@ -21,9 +18,9 @@ use draw::*;
 use input::*;
 use monsters::*;
 
-use macroquad::{prelude::*, ui::root_ui};
+use macroquad::{prelude::*, ui::root_ui, miniquad::conf::{LinuxBackend, Platform}};
 
-#[macroquad::main("roguelite")]
+#[macroquad::main(window_conf)]
 async fn main() {
     let mut textures = HashMap::new();
 
@@ -47,8 +44,8 @@ async fn main() {
 
     let mut camera = Camera2D {
         target: players[0].pos(),
-        zoom: Vec2::new(0.001, -0.001 * (screen_width() / screen_height())),
-        //zoom: Vec2::new(0.005, -0.005 * (screen_width() / screen_height())),
+        //zoom: Vec2::new(0.001, -0.001 * (screen_width() / screen_height())),
+        zoom: Vec2::new(0.005, -0.005 * (screen_width() / screen_height())),
         ..Default::default()
     };
 
@@ -58,8 +55,15 @@ async fn main() {
     let mut fps = 0.0;
 
     loop {
-        let frame_time = Instant::now();
+        let frame_time = get_frame_time();
         frames_till_update_framerate -= 1;
+
+        // If running at more than 60 fps, slow down
+        if frame_time < 1.0 / 60.0 {
+            let time_to_sleep = ((1.0 / 60.0) - frame_time) * 1000.0;
+            std::thread::sleep(std::time::Duration::from_millis(time_to_sleep as u64));
+
+        }
 
         // Logic
         keyboard_input(&mut players[0], &textures, &map);
@@ -82,11 +86,25 @@ async fn main() {
         root_ui().label(Vec2::ZERO, &fps.to_string());
 
         if SHOW_FRAMERATE && frames_till_update_framerate == 0 {
-            fps = (1.0 / Instant::now().duration_since(frame_time).as_secs_f32()).round();
+            fps = (1.0 / frame_time).round();
             frames_till_update_framerate = 30;
 
         }
 
         next_frame().await
     }
+}
+
+fn window_conf() -> Conf {
+    Conf {
+        window_title: "Roguelite".to_string(),
+        platform: Platform {
+            //linux_backend: LinuxBackend::WaylandWithX11Fallback,
+
+            ..Default::default()
+        },
+
+        ..Default::default()
+    }
+
 }

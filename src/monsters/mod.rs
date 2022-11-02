@@ -31,30 +31,32 @@ pub trait Monster: AsAABB + Drawable + Send {
 
 pub fn update_monsters(monsters: &mut Vec<Box<dyn Monster>>, players: &mut [Player], map: &Map) {
     monsters.par_iter_mut().for_each(|m| {
-        m.movement(players, map);
+        // Only move monsters that are within a certain distance of any player
+        let close_to_a_player = players.iter().any(|p| {
+            p.pos().distance(m.pos()) <= (TILE_SIZE * (MAP_WIDTH_TILES + MAP_HEIGHT_TILES) / 2) as f32 * 0.25
+
+        });
+
+        if close_to_a_player {
+            m.movement(players, map);
+
+        }
 
     });
 
-    monsters.drain_filter(|m| {
-        m.damage_players(players, map);
-        
-        // Remove dead monsters
-        !m.living()
+    let mut i  = 0;
 
-    });
+    while i < monsters.len() {
+        monsters[i].damage_players(players, map);
 
-}
+        if !monsters[i].living() {
+            monsters.remove(i);
 
-const fn seconds_to_frames(time: f32) -> u16 {
-    let time_as_frames = time * 60.0;
+        } else {
+            i += 1;
 
-    if time_as_frames <= u16::MAX as f32 {
-        time_as_frames as u16
-
-    } else {
-        panic!("Value too large");
+        }
 
     }
-
 
 }

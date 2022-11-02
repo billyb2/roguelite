@@ -37,7 +37,19 @@ pub fn attack(attack: Box<dyn Attack>, player: &mut Player) {
 
 pub fn update_attacks(players: &mut [Player], monsters: &mut [Box<dyn Monster>], map: &Map) {
     players.iter_mut().for_each(|p|  {
-        p.attacks.drain_filter(|a| a.update(monsters, map));
+        let mut i = 0; 
+
+        while i < p.attacks.len() {
+            if p.attacks[i].update(monsters, map) {
+                p.attacks.remove(i);
+
+            } else {
+                i += 1;
+
+            }
+            
+
+        }
 
     });
 
