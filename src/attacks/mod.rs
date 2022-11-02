@@ -16,7 +16,7 @@ pub use stab::*;
 
 use macroquad::prelude::*;
 
-pub trait Attack: Drawable {
+pub trait Attack: Drawable + Send {
     fn new(player: &mut Player, angle: f32, textures: &HashMap<String, Texture2D>, map: &Map) -> Box<Self> where Self: Sized;
     // Returns whether or not the attack should be destroyed
     fn update(&mut self, monsters: &mut [Box<dyn Monster>], map: &Map) -> bool;

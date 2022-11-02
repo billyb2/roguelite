@@ -3,6 +3,12 @@ name = "roguelite"
 version = "0.1.0"
 edition = "2021"
 
+[profile.dev]
+debug = true
+
+[profile.release]
+debug = true
+
 [dependencies]
 macroquad = { version = "0.3", default-features = false }
 here_be_dragons = { version = "0.2", default-features = false }

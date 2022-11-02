@@ -11,7 +11,7 @@ mod draw;
 
 use std::{
     fs, 
-    collections::HashMap, f32::consts::PI
+    collections::HashMap, f32::consts::PI, time::Instant
 };
 
 use attacks::*;
@@ -21,7 +21,7 @@ use draw::*;
 use input::*;
 use monsters::*;
 
-use macroquad::prelude::*;
+use macroquad::{prelude::*, ui::root_ui};
 
 #[macroquad::main("roguelite")]
 async fn main() {
@@ -47,11 +47,20 @@ async fn main() {
 
     let mut camera = Camera2D {
         target: players[0].pos(),
-        zoom: Vec2::new(0.005, -0.005 * (screen_width() / screen_height())),
+        zoom: Vec2::new(0.001, -0.001 * (screen_width() / screen_height())),
+        //zoom: Vec2::new(0.005, -0.005 * (screen_width() / screen_height())),
         ..Default::default()
     };
 
+    const SHOW_FRAMERATE: bool = true;
+
+    let mut frames_till_update_framerate: u8 = 30;
+    let mut fps = 0.0;
+
     loop {
+        let frame_time = Instant::now();
+        frames_till_update_framerate -= 1;
+
         // Logic
         keyboard_input(&mut players[0], &textures, &map);
         update_cooldowns(&mut players);
@@ -63,14 +72,20 @@ async fn main() {
         // Rendering
         clear_background(WHITE);
 
-//        /*
         set_camera(&camera);
-//        */
 
         map.draw();
         monsters.iter().for_each(|m| m.draw());
         players.iter().flat_map(|p| p.attacks.iter()).for_each(|a| a.draw());
         players.iter().for_each(|p| p.draw());
+
+        root_ui().label(Vec2::ZERO, &fps.to_string());
+
+        if SHOW_FRAMERATE && frames_till_update_framerate == 0 {
+            fps = (1.0 / Instant::now().duration_since(frame_time).as_secs_f32()).round();
+            frames_till_update_framerate = 30;
+
+        }
 
         next_frame().await
     }

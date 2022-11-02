@@ -52,16 +52,11 @@ impl Monster for SmallRat {
     fn new(textures: &HashMap<String, Texture2D>, map: &Map) -> Self {
         // Pick all points at least 15 tiles away from all players
         let pos = *map.current_room().background_objects().iter().filter_map(|o| {
-            if o.pos().distance(map.current_spawn()) > (12 * TILE_SIZE) as f32 {
-                Some(o.pos())
-
-            } else {
-                None
-
-            }
+            match o.pos().distance(map.current_spawn()) > (12 * TILE_SIZE) as f32 {
+                true =>Some(o.pos()),
+                false => None,
+            } 
         }).collect::<Vec<Vec2>>().choose().unwrap();
-        
-
 
         Self {
             pos,
@@ -116,7 +111,7 @@ impl Monster for SmallRat {
 }
 
 
-const AGGRO_DISTANCE: f32 = (TILE_SIZE * 4) as f32;
+const AGGRO_DISTANCE: f32 = (TILE_SIZE * 6) as f32;
 
 // The rat just wanders around a lil in passive mode
 fn passive_mode(my_monster: &mut SmallRat, players: &mut [Player], map: &Map) {
