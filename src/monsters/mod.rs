@@ -11,12 +11,15 @@ use crate::{
 
 use macroquad::prelude::*;
 
+use rayon::prelude::{IntoParallelRefMutIterator, ParallelIterator};
 pub use small_rat::*;
 
 // All monsters are required to have a drawable AABB and be drawable
-pub trait Monster: AsAABB + Drawable {
+pub trait Monster: AsAABB + Drawable + Send {
     fn new(textures: &HashMap<String, Texture2D>, map: &Map) -> Self where Self: Sized;
-    fn ai(&mut self, players: &mut [Player], map: &Map);
+    // Movement and damaging players are seperate so that the movement part can be run in parallel
+    fn movement(&mut self, players: &[Player], map: &Map);
+    fn damage_players(&mut self, players: &mut [Player], map: &Map);
     fn take_damage(&mut self, damage: f32, map: &Map);
     fn living(&self) -> bool;
     fn into_aabb_obj(&self) -> AxisAlignedBoundingBox{
@@ -27,8 +30,13 @@ pub trait Monster: AsAABB + Drawable {
 }
 
 pub fn update_monsters(monsters: &mut Vec<Box<dyn Monster>>, players: &mut [Player], map: &Map) {
+    monsters.par_iter_mut().for_each(|m| {
+        m.movement(players, map);
+
+    });
+
     monsters.drain_filter(|m| {
-        m.ai(players, map);
+        m.damage_players(players, map);
         
         // Remove dead monsters
         !m.living()

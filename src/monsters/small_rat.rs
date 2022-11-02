@@ -73,13 +73,16 @@ impl Monster for SmallRat {
 
     }
 
-    fn ai(&mut self, players: &mut [Player], map: &Map) {
+    fn movement(&mut self, players: &[Player], map: &Map) {
         match self.attack_mode {
             AttackMode::Passive => passive_mode(self, players, map),
             AttackMode::Attacking => attack_mode(self, players, map),
 
         };
 
+    }
+
+    fn damage_players(&mut self, players: &mut [Player], map: &Map) {
         players.iter_mut().for_each(|p| {
             if aabb_collision(p, self, Vec2::ZERO) {
                 const DAMAGE: f32 = 20.0;
@@ -90,7 +93,6 @@ impl Monster for SmallRat {
             }
 
         });
-
     }
 
     fn take_damage(&mut self, damage: f32, _map: &Map) {
@@ -114,7 +116,7 @@ impl Monster for SmallRat {
 const AGGRO_DISTANCE: f32 = (TILE_SIZE * 6) as f32;
 
 // The rat just wanders around a lil in passive mode
-fn passive_mode(my_monster: &mut SmallRat, players: &mut [Player], map: &Map) {
+fn passive_mode(my_monster: &mut SmallRat, players: &[Player], map: &Map) {
     my_monster.time_til_move = my_monster.time_til_move.saturating_sub(1);
 
     let find_target = || -> Vec2 {
@@ -189,7 +191,7 @@ fn passive_mode(my_monster: &mut SmallRat, players: &mut [Player], map: &Map) {
 }
 
 
-fn attack_mode(my_monster: &mut SmallRat, players: &mut [Player], map: &Map) {
+fn attack_mode(my_monster: &mut SmallRat, players: &[Player], map: &Map) {
     if let Some(Target::PlayerIndex(i)) = my_monster.current_target {
         my_monster.time_til_move = my_monster.time_til_move.saturating_sub(1);
 

@@ -11,7 +11,6 @@ use crate::{
 
 #[derive(Clone)]
 pub struct Object {
-    index: usize,
     pos: Vec2,
     size: Vec2,
     texture: Texture2D,
@@ -69,7 +68,6 @@ impl Map {
             let y_pos = (i / TILE_HEIGHT) * TILE_SIZE;
             
             Object {
-                index: i,
                 pos: Vec2::new(x_pos as f32, y_pos as f32),
                 size: Vec2::splat(TILE_SIZE as f32),
                 texture,
@@ -90,7 +88,6 @@ impl Map {
         let exit_pos = map_gen.exit_point.map(|p| Vec2::new(p.x as f32, p.y as f32) * Vec2::splat(TILE_SIZE as f32)).unwrap();
 
         let exit = Object {
-            index: background_objects.len(),
             pos: exit_pos,
             size: Vec2::splat(TILE_SIZE as f32),
             texture: *textures.get("green.webp").unwrap(),
@@ -102,18 +99,12 @@ impl Map {
         let spawn = background_objects.iter().find_map(|o| {
             // First, find any points greater than half the map
             if o.pos.distance(exit_pos) < ((TILE_WIDTH * TILE_SIZE) / 2) as f32 {
-                return None;
+                return Some(o.pos);
 
             } 
 
             // Then, only keep background objects with a definite path to the exit
-            let aabb = AxisAlignedBoundingBox {
-                pos: o.pos,
-                size: Vec2::splat(PLAYER_SIZE),
-
-            };
-
-            match find_path(&aabb, exit_pos, &collidable_objects).is_some() {
+            match find_path(o, exit_pos, &collidable_objects).is_some() {
                 true => Some(o.pos),
                 false => None,
             }
@@ -221,52 +212,55 @@ fn tile_distance(tile_index: usize, other_tile_index: usize) -> OrderedFloat<f32
 
 }
 
-fn find_viable_neighbors(collidable_objects: &[Object], tile_index: usize) -> Vec<(usize, OrderedFloat<f32>)> {
-    [-1, 1, (TILE_WIDTH as isize), -(TILE_WIDTH as isize)].into_iter().filter_map(|change| {
-        let tile_index = tile_index as isize + change;
+// (X, Y), DISTANCE_BETWEENE
+type Viability = ((OrderedFloat<f32>, OrderedFloat<f32>), OrderedFloat<f32>);
 
-        if tile_index < 0 || tile_index > (TILE_WIDTH * TILE_HEIGHT) as isize {
-            return None;
+fn find_viable_neighbors(collidable_objects: &[Object], size: Vec2, (OrderedFloat(pos_x), OrderedFloat(pos_y)): (OrderedFloat<f32>, OrderedFloat<f32>)) -> Vec<Viability> {
+    let pos = Vec2::new(pos_x, pos_y);
 
+    [Vec2::new(-1.0, 0.0), Vec2::new(1.0, 0.0), Vec2::new(0.0, -1.0), Vec2::new(0.0, 1.0)].into_iter().filter_map(|change| {
+        let new_pos = pos + change * size;
+        let aabb = AxisAlignedBoundingBox {
+            pos: new_pos,
+            size,
+        };
+
+        let collision = collidable_objects.iter().any(|o| {
+            aabb_collision(o, &aabb, Vec2::ZERO)
+        });
+
+        match collision {
+            true => None,
+            // Return the center of each object
+            false => {
+                Some((
+                    (OrderedFloat(new_pos.x), OrderedFloat(new_pos.y)), 
+                    OrderedFloat(pos.distance_squared(new_pos))
+                ))
+
+            },
         }
-
-        let tile_index = tile_index as usize;
-
-        if collidable_objects.iter().any(|o| o.index == tile_index) {
-            return None;
-
-        }
-
-        Some((tile_index, OrderedFloat(1.0)))
 
     }).collect()
 
 }
 
-
-pub fn find_path(pos: &dyn AsAABB, goal: Vec2, collidable_objects: &[Object]) -> Option<Vec<Vec2>> {
-    let aabb = pos.as_aabb();
-    let start = aabb.pos + (aabb.size / Vec2::splat(2.0));
-
-    // First, try to find the tile the starting position is in
-    let start_tile = (start / Vec2::splat(TILE_SIZE as f32)).floor();
-    let goal_tile = (goal / Vec2::splat(TILE_SIZE as f32)).floor();
-
-    let start_tile_index = start_tile.x as usize + start_tile.y as usize * TILE_WIDTH;
-    let goal_tile_index = goal_tile.x as usize + goal_tile.y as usize * TILE_WIDTH;
+pub fn find_path(start: &dyn AsAABB, goal: Vec2, collidable_objects: &[Object]) -> Option<Vec<Vec2>> {
+    let aabb = start.as_aabb();
+    let pos = aabb.pos;
+    
+    let avg_size = (aabb.size.x + aabb.size.y) / 2.0;
 
     let path = astar(
-        &start_tile_index, 
-        |i| find_viable_neighbors(collidable_objects, *i), 
-        |i| tile_distance(*i, goal_tile_index), 
-        |i| *i == goal_tile_index
+        &(OrderedFloat(pos.x), OrderedFloat(pos.y)), 
+        |pos| find_viable_neighbors(collidable_objects, aabb.size, *pos), 
+        |(OrderedFloat(pos_x), OrderedFloat(pos_y))| OrderedFloat(Vec2::new(*pos_x, *pos_y).distance_squared(goal)), 
+        // The goal is reached when we're fairly close to it
+        |(OrderedFloat(pos_x), OrderedFloat(pos_y))| Vec2::new(*pos_x, *pos_y).distance(goal) <= avg_size,
     );
 
-    path.map(|(indices, _)| indices.iter().map(|i| {
-        let x_pos = (i % TILE_WIDTH) * TILE_SIZE;
-        let y_pos = (i / TILE_HEIGHT) * TILE_SIZE;
-
-        Vec2::new(x_pos as f32, y_pos as f32)
+    path.map(|(positions, _)| positions.iter().map(|(OrderedFloat(pos_x), OrderedFloat(pos_y))| {
+        Vec2::new(*pos_x, *pos_y) + (aabb.size / 2.0)
     }).collect())
 
 }
