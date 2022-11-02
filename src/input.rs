@@ -3,12 +3,17 @@ use std::collections::HashMap;
 use crate::{
     player::{Player, move_player}, 
     math::get_angle,
-    map::Map, 
+    map::Floor, 
     attacks::*,
 };
 use macroquad::prelude::*;
 
-pub fn keyboard_input(player: &mut Player, textures: &HashMap<String, Texture2D>, map: &Map) {
+pub fn keyboard_input(player: &mut Player, textures: &HashMap<String, Texture2D>, floor: &Floor) {
+    if player.health() == 0.0 {
+        return;
+
+    }
+
     let mut x_movement: f32 = 0.0;
     let mut y_movement: f32 = 0.0;
 
@@ -36,21 +41,21 @@ pub fn keyboard_input(player: &mut Player, textures: &HashMap<String, Texture2D>
     player.angle = get_angle(mouse_pos.x, mouse_pos.y, 0.0, 0.0);
 
     if is_mouse_button_down(MouseButton::Left) {
-        let slash = Slash::new(player, player.angle, textures, map);
+        let slash = Slash::new(player, player.angle, textures, floor);
         attack(slash, player);
 
 
     }
 
     if is_mouse_button_down(MouseButton::Right) {
-        let stab = Stab::new(player, player.angle, textures, map);
+        let stab = Stab::new(player, player.angle, textures, floor);
         attack(stab, player);
 
     }
 
     if x_movement != 0.0 || y_movement != 0.0 {
         let angle = y_movement.atan2(x_movement);
-        move_player(player, angle, None, map)
+        move_player(player, angle, None, floor)
 
     }
 

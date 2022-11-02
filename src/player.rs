@@ -1,7 +1,7 @@
 use macroquad::prelude::*;
 use crate::{
     draw::Drawable, 
-    map::Map, 
+    map::Floor, 
     math::{AsAABB, AxisAlignedBoundingBox}, attacks::Attack
 };
 
@@ -16,7 +16,7 @@ pub enum PlayerClass {
 pub struct Player {
     class: PlayerClass,
     pub angle: f32,
-    pos: Vec2,
+    pub pos: Vec2,
     speed: f32,
     health: f32,
     invincibility_frames: u16, 
@@ -42,6 +42,12 @@ impl Player {
     #[inline]
     pub fn pos(&self) -> Vec2 {
         self.pos
+
+    }
+
+    #[inline]
+    pub fn health(&self) -> f32 {
+        self.health
 
     }
 
@@ -84,18 +90,18 @@ impl Drawable for Player {
 
 }
 
-pub fn move_player(player: &mut Player, angle: f32, speed: Option<Vec2>, map: &Map) {
+pub fn move_player(player: &mut Player, angle: f32, speed: Option<Vec2>, floor: &Floor) {
     let direction: Vec2 = (angle.cos(), angle.sin()).into();
     let distance = direction * speed.unwrap_or_else(|| Vec2::splat(player.speed));
 
-    if !map.collision(player, distance) {
+    if !floor.collision(player, distance) {
         player.pos += distance;
 
     }
 
 }
 
-pub fn damage_player(player: &mut Player, damage: f32, damage_direction: f32, map: &Map) {
+pub fn damage_player(player: &mut Player, damage: f32, damage_direction: f32, floor: &Floor) {
     if player.invincibility_frames > 0 {
         return;
 
@@ -110,7 +116,7 @@ pub fn damage_player(player: &mut Player, damage: f32, damage_direction: f32, ma
     };
 
     // Have the player "flinch" away from damage
-    move_player(player, damage_direction, Some(Vec2::splat(PLAYER_SIZE)), map);
+    move_player(player, damage_direction, Some(Vec2::splat(PLAYER_SIZE)), floor);
 
     player.invincibility_frames = (damage as u16) * 2;
 

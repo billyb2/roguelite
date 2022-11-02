@@ -6,7 +6,7 @@ use crate::{
     draw::Drawable, 
     math::{AsAABB, AxisAlignedBoundingBox}, 
     player::Player, 
-    map::{Map, TILE_SIZE, MAP_WIDTH_TILES, MAP_HEIGHT_TILES}
+    map::{TILE_SIZE, MAP_WIDTH_TILES, MAP_HEIGHT_TILES, Floor}
 };
 
 use macroquad::prelude::*;
@@ -16,11 +16,11 @@ pub use small_rat::*;
 
 // All monsters are required to have a drawable AABB and be drawable
 pub trait Monster: AsAABB + Drawable + Send {
-    fn new(textures: &HashMap<String, Texture2D>, map: &Map) -> Self where Self: Sized;
+    fn new(textures: &HashMap<String, Texture2D>, floor: &Floor) -> Self where Self: Sized;
     // Movement and damaging players are seperate so that the movement part can be run in parallel
-    fn movement(&mut self, players: &[Player], map: &Map);
-    fn damage_players(&mut self, players: &mut [Player], map: &Map);
-    fn take_damage(&mut self, damage: f32, damage_direction: f32, map: &Map);
+    fn movement(&mut self, players: &[Player], floor: &Floor);
+    fn damage_players(&mut self, players: &mut [Player], floor: &Floor);
+    fn take_damage(&mut self, damage: f32, damage_direction: f32, floor: &Floor);
     fn living(&self) -> bool;
     fn into_aabb_obj(&self) -> AxisAlignedBoundingBox{
         self.as_aabb()
@@ -29,7 +29,7 @@ pub trait Monster: AsAABB + Drawable + Send {
 
 }
 
-pub fn update_monsters(monsters: &mut Vec<Box<dyn Monster>>, players: &mut [Player], map: &Map) {
+pub fn update_monsters(monsters: &mut Vec<Box<dyn Monster>>, players: &mut [Player], floor: &Floor) {
     monsters.par_iter_mut().for_each(|m| {
         // Only move monsters that are within a certain distance of any player
         let close_to_a_player = players.iter().any(|p| {
@@ -38,7 +38,7 @@ pub fn update_monsters(monsters: &mut Vec<Box<dyn Monster>>, players: &mut [Play
         });
 
         if close_to_a_player {
-            m.movement(players, map);
+            m.movement(players, floor);
 
         }
 
@@ -47,7 +47,7 @@ pub fn update_monsters(monsters: &mut Vec<Box<dyn Monster>>, players: &mut [Play
     let mut i  = 0;
 
     while i < monsters.len() {
-        monsters[i].damage_players(players, map);
+        monsters[i].damage_players(players, floor);
 
         if !monsters[i].living() {
             monsters.remove(i);

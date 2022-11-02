@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use crate::{
     draw::Drawable, 
     player::Player,
-    map::Map,
+    map::Floor,
     monsters::Monster,
 
 };
@@ -17,9 +17,9 @@ pub use stab::*;
 use macroquad::prelude::*;
 
 pub trait Attack: Drawable + Send + Sync {
-    fn new(player: &mut Player, angle: f32, textures: &HashMap<String, Texture2D>, map: &Map) -> Box<Self> where Self: Sized;
+    fn new(player: &mut Player, angle: f32, textures: &HashMap<String, Texture2D>, floor: &Floor) -> Box<Self> where Self: Sized;
     // Returns whether or not the attack should be destroyed
-    fn update(&mut self, monsters: &mut [Box<dyn Monster>], map: &Map) -> bool;
+    fn update(&mut self, monsters: &mut [Box<dyn Monster>], floor: &Floor) -> bool;
     fn cooldown(&self) -> u16;
 
 }
@@ -35,12 +35,12 @@ pub fn attack(attack: Box<dyn Attack>, player: &mut Player) {
 
 }
 
-pub fn update_attacks(players: &mut [Player], monsters: &mut [Box<dyn Monster>], map: &Map) {
+pub fn update_attacks(players: &mut [Player], monsters: &mut [Box<dyn Monster>], floor: &Floor) {
     players.iter_mut().for_each(|p|  {
         let mut i = 0; 
 
         while i < p.attacks.len() {
-            if p.attacks[i].update(monsters, map) {
+            if p.attacks[i].update(monsters, floor) {
                 p.attacks.remove(i);
 
             } else {

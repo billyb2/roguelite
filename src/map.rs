@@ -7,7 +7,7 @@ use pathfinding::prelude::*;
 
 use crate::{
     draw::Drawable, 
-    math::{AsAABB, aabb_collision, AxisAlignedBoundingBox}, monsters::{Monster, SmallRat}, player::PLAYER_SIZE};
+    math::{AsAABB, aabb_collision, AxisAlignedBoundingBox}, monsters::{Monster, SmallRat}, player::{PLAYER_SIZE, Player}};
 
 #[derive(Clone)]
 pub struct Object {
@@ -28,7 +28,7 @@ impl AsAABB for Object {
 
 }
 
-pub struct Room {
+pub struct Floor {
     spawn: Vec2,
     collidable_objects: Vec<Object>,
     background_objects: Vec<Object>,
@@ -36,26 +36,26 @@ pub struct Room {
 
 }
 
-impl Room {
+impl Floor {
     pub fn background_objects(&self) -> &[Object] {
         &self.background_objects
 
     }
 
-}
+    pub fn collision<A: AsAABB>(&self, aabb: &A, distance: Vec2) -> bool {
+        self.collidable_objects.iter().any(|object| 
+            aabb_collision(aabb, object, distance)
 
-pub struct Map {
-    current_room_index: usize,
-    rooms: Vec<Room>,
+        )
 
-}
+    }
 
-pub const TILE_SIZE: usize = 25;
-pub const MAP_WIDTH_TILES: usize = 50;
-pub const MAP_HEIGHT_TILES: usize = 50;
+    pub fn current_spawn(&self) -> Vec2 {
+        self.spawn
 
-impl Map {
-    pub fn new(textures: &HashMap<String, Texture2D>, monsters: &mut Vec<Box<dyn Monster>>) -> Self {
+    }
+
+    pub fn new(_floor_num: usize, textures: &HashMap<String, Texture2D>) -> Self {
         let map_gen = MapBuilder::<NoData>::new(MAP_WIDTH_TILES, MAP_HEIGHT_TILES)
             .with(NoiseGenerator::new(0.55))
             .with(CellularAutomata::new())
@@ -116,53 +116,79 @@ impl Map {
             }
 
         }).unwrap();
-        
-        let rooms = vec![Room {
+
+        Floor {
             spawn,
             collidable_objects,
             background_objects,
             exit,
 
-        }];
+        }
+
+    }
+
+    pub fn find_path(&self, pos: &dyn AsAABB, goal: Vec2) -> Option<Vec<Vec2>> {
+        find_path(pos, goal, &self.collidable_objects)
+
+    }
+
+    pub fn should_descend(&self, players: &[Player], _monsters: &[Box<dyn Monster>]) -> bool {
+        // If any players are touching the exit, descend a floor
+        players.iter().any(|p| {
+            aabb_collision(p, &self.exit, Vec2::ZERO)
+
+        })
+
+    }
+
+}
+
+pub struct Map {
+    current_floor_index: usize,
+    rooms: Vec<Floor>,
+
+}
+
+pub const TILE_SIZE: usize = 25;
+pub const MAP_WIDTH_TILES: usize = 50;
+pub const MAP_HEIGHT_TILES: usize = 50;
+
+impl Map {
+    pub fn new(textures: &HashMap<String, Texture2D>, monsters: &mut Vec<Box<dyn Monster>>) -> Self {
+        let floors: Vec<Floor> = (0..5).into_iter().map(|floor_num| {
+            Floor::new(floor_num, textures)
+
+        }).collect();
 
         let map = Self {
-            current_room_index: 0,
-            rooms,
+            current_floor_index: 0,
+            rooms: floors,
         };
 
 
-        monsters.extend((0..200).map(|_| {
-            let monster: Box<dyn Monster> = Box::new(SmallRat::new(textures, &map));
-            monster
-        }));
+        spawn_monsters(0, monsters, textures, map.current_floor()); 
 
         map
 
     }
 
-    pub fn current_spawn(&self) -> Vec2 {
-        self.rooms[self.current_room_index].spawn
+    pub fn current_floor(&self) -> &Floor {
+        &self.rooms[self.current_floor_index]
 
     }
 
-    pub fn collision<A: AsAABB>(&self, aabb: &A, distance: Vec2) -> bool {
-        let current_room = &self.rooms[self.current_room_index];
+    pub fn descend(&mut self, players: &mut [Player], monsters: &mut Vec<Box<dyn Monster>>, textures: &HashMap<String, Texture2D>) {
+        self.current_floor_index += 1;
+        let current_floor = self.current_floor();
 
-        current_room.collidable_objects.iter().any(|object| 
-            aabb_collision(aabb, object, distance)
+        players.iter_mut().for_each(|p| {
+            p.pos = current_floor.spawn;
 
-        )
+        });
 
-    }
+        monsters.clear();
 
-    pub fn current_room(&self) -> &Room {
-        &self.rooms[self.current_room_index]
-
-    }
-
-    pub fn find_path(&self, pos: &dyn AsAABB, goal: Vec2) -> Option<Vec<Vec2>> {
-        let room = self.current_room();
-        find_path(pos, goal, &room.collidable_objects)
+        spawn_monsters(self.current_floor_index, monsters, textures, current_floor);
 
     }
 
@@ -194,7 +220,7 @@ impl Drawable for Map {
     }
 
     fn draw(&self) {
-        let room = &self.rooms[self.current_room_index];
+        let room = &self.rooms[self.current_floor_index];
         room.background_objects.iter().chain(room.collidable_objects.iter()).for_each(|o| o.draw());
         room.exit.draw();
 
@@ -203,7 +229,7 @@ impl Drawable for Map {
 
 }
 
-// (X, Y), DISTANCE_BETWEENE
+// (X, Y), DISTANCE_BETWEEN
 type Viability = ((OrderedFloat<f32>, OrderedFloat<f32>), OrderedFloat<f32>);
 
 fn find_viable_neighbors(collidable_objects: &[Object], size: Vec2, (OrderedFloat(pos_x), OrderedFloat(pos_y)): (OrderedFloat<f32>, OrderedFloat<f32>)) -> Vec<Viability> {
@@ -254,5 +280,17 @@ pub fn find_path(start: &dyn AsAABB, goal: Vec2, collidable_objects: &[Object]) 
     path.map(|(positions, _)| positions.iter().map(|(OrderedFloat(pos_x), OrderedFloat(pos_y))| {
         Vec2::new(*pos_x, *pos_y) + (aabb.size / 2.0)
     }).collect())
+
+}
+
+fn spawn_monsters(_floor_num: usize, monsters: &mut Vec<Box<dyn Monster>>, textures: &HashMap<String, Texture2D>, floor: &Floor) {
+    monsters.extend(
+        (0..25).map(|_| {
+            let monster: Box<dyn Monster> = Box::new(SmallRat::new(textures, floor));
+            monster
+
+        })
+
+    );
 
 }

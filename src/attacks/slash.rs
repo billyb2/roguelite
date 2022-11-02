@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{player::Player, draw::Drawable, map::{Map, self}, monsters::Monster, math::{AsAABB, AxisAlignedBoundingBox, aabb_collision, get_angle}};
+use crate::{player::Player, draw::Drawable, map::Floor, monsters::Monster, math::{AsAABB, AxisAlignedBoundingBox, aabb_collision, get_angle}};
 use macroquad::prelude::*;
 
 use super::Attack;
@@ -16,7 +16,7 @@ pub struct Slash {
 }
 
 impl Attack for Slash {
-    fn new(player: &mut Player, angle: f32, textures: &HashMap<String, Texture2D>, _map: &Map) -> Box<Self> {
+    fn new(player: &mut Player, angle: f32, textures: &HashMap<String, Texture2D>, _floor: &Floor) -> Box<Self> {
         Box::new(Self {
             pos: player.pos(),
             angle,
@@ -26,10 +26,10 @@ impl Attack for Slash {
         })
     }
 
-    fn update(&mut self, monsters: &mut [Box<dyn Monster>], map: &map::Map) -> bool {
+    fn update(&mut self, monsters: &mut [Box<dyn Monster>], floor: &Floor) -> bool {
         let movement = Vec2::new(self.angle.cos(), self.angle.sin()) * 5.0;
 
-        if !map.collision(self, movement) {
+        if !floor.collision(self, movement) {
             self.pos += movement;
             self.time += 1;
 
@@ -48,7 +48,7 @@ impl Attack for Slash {
             const DAMAGE: f32 = 10.0;
 
             let damage_direction = get_angle(monster.pos().x, monster.pos().y, self.pos.x, self.pos.y);
-            monster.take_damage(DAMAGE, damage_direction, map);
+            monster.take_damage(DAMAGE, damage_direction, floor);
 
             return true;
 

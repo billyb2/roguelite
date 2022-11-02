@@ -4,7 +4,7 @@ use crate::{
     player::{Player, damage_player},
     monsters::Monster,
     math::{AsAABB, AxisAlignedBoundingBox, get_angle, aabb_collision}, 
-    draw::Drawable, map::{Map, TILE_SIZE},
+    draw::Drawable, map::{TILE_SIZE, Floor},
 };
 use macroquad::{prelude::*, rand::ChooseRandom};
 
@@ -28,9 +28,7 @@ impl Target {
             _ => panic!(),
 
         }
-
     }
-
 }
 
 const SIZE: f32 = 15.0;
@@ -50,10 +48,10 @@ pub struct SmallRat {
 }
 
 impl Monster for SmallRat {
-    fn new(textures: &HashMap<String, Texture2D>, map: &Map) -> Self {
+    fn new(textures: &HashMap<String, Texture2D>, floor: &Floor) -> Self {
         // Pick all points at least 15 tiles away from all players
-        let pos = *map.current_room().background_objects().iter().filter_map(|o| {
-            match o.pos().distance(map.current_spawn()) > (12 * TILE_SIZE) as f32 {
+        let pos = *floor.background_objects().iter().filter_map(|o| {
+            match o.pos().distance(floor.current_spawn()) > (12 * TILE_SIZE) as f32 {
                 true =>Some(o.pos()),
                 false => None,
             } 
@@ -73,7 +71,7 @@ impl Monster for SmallRat {
 
     }
 
-    fn movement(&mut self, players: &[Player], map: &Map) {
+    fn movement(&mut self, players: &[Player], map: &Floor) {
         match self.attack_mode {
             AttackMode::Passive => passive_mode(self, players, map),
             AttackMode::Attacking => attack_mode(self, players, map),
@@ -82,20 +80,20 @@ impl Monster for SmallRat {
 
     }
 
-    fn damage_players(&mut self, players: &mut [Player], map: &Map) {
+    fn damage_players(&mut self, players: &mut [Player], floor: &Floor) {
         players.iter_mut().for_each(|p| {
             if aabb_collision(p, self, Vec2::ZERO) {
                 const DAMAGE: f32 = 20.0;
                 let damage_direction = get_angle(p.pos().x, p.pos().y, self.pos.x, self.pos.y);
 
-                damage_player(p, DAMAGE, damage_direction, map);
+                damage_player(p, DAMAGE, damage_direction, floor);
 
             }
 
         });
     }
 
-    fn take_damage(&mut self, damage: f32, damage_direction: f32, _map: &Map) {
+    fn take_damage(&mut self, damage: f32, damage_direction: f32, _floor: &Floor) {
         self.health -= damage;
 
         if self.health < 0.0 {
@@ -119,11 +117,11 @@ impl Monster for SmallRat {
 const AGGRO_DISTANCE: f32 = (TILE_SIZE * 6) as f32;
 
 // The rat just wanders around a lil in passive mode
-fn passive_mode(my_monster: &mut SmallRat, players: &[Player], map: &Map) {
+fn passive_mode(my_monster: &mut SmallRat, players: &[Player], floor: &Floor) {
     my_monster.time_til_move = my_monster.time_til_move.saturating_sub(1);
 
     let find_target = || -> Vec2 {
-        *map.current_room().background_objects().iter().filter_map(|o| {
+        *floor.background_objects().iter().filter_map(|o| {
             let obj_distance = o.pos().distance(my_monster.pos);
 
             match obj_distance > (TILE_SIZE * 5) as f32 && obj_distance < (TILE_SIZE * 8) as f32 {
@@ -142,7 +140,7 @@ fn passive_mode(my_monster: &mut SmallRat, players: &[Player], map: &Map) {
 
     if my_monster.time_til_move == 0 {
         if my_monster.current_path.is_none() {
-            if let Some(path) = map.find_path(my_monster, my_monster.current_target.as_ref().unwrap().unwrap_pos()) {
+            if let Some(path) = floor.find_path(my_monster, my_monster.current_target.as_ref().unwrap().unwrap_pos()) {
                 my_monster.current_path = Some((path, 1));
 
             } else {
@@ -181,7 +179,7 @@ fn passive_mode(my_monster: &mut SmallRat, players: &[Player], map: &Map) {
 
     // If the rat gets within a few tiles of a player, it'll start attack mode
 
-    if let Some((i, _)) = players.iter().enumerate().find(|(_, p)| p.pos().distance(my_monster.pos) <= AGGRO_DISTANCE) {
+    if let Some((i, _)) = players.iter().enumerate().find(|(_, p)| p.pos().distance(my_monster.pos) <= AGGRO_DISTANCE && p.health() > 0.0) {
         my_monster.time_til_move = 30;
         my_monster.time_spent_moving = 0;
 
@@ -194,7 +192,7 @@ fn passive_mode(my_monster: &mut SmallRat, players: &[Player], map: &Map) {
 }
 
 
-fn attack_mode(my_monster: &mut SmallRat, players: &[Player], map: &Map) {
+fn attack_mode(my_monster: &mut SmallRat, players: &[Player], floor: &Floor) {
     if let Some(Target::PlayerIndex(i)) = my_monster.current_target {
         my_monster.time_til_move = my_monster.time_til_move.saturating_sub(1);
 
@@ -207,7 +205,7 @@ fn attack_mode(my_monster: &mut SmallRat, players: &[Player], map: &Map) {
 
         // First, check the targeted player is still within aggro distance
         let mut distance_from_target = target_player.pos().distance(my_monster.pos);
-        let target_in_aggro_range = distance_from_target <= AGGRO_DISTANCE;
+        let target_in_aggro_range = distance_from_target <= AGGRO_DISTANCE && target_player.health() > 0.0;
 
         // If it isn't, try to see if there's anohter player within aggro range
         if !target_in_aggro_range {
@@ -237,7 +235,7 @@ fn attack_mode(my_monster: &mut SmallRat, players: &[Player], map: &Map) {
 
         // We now have a player to target, so find the quickest path to get to them
         if my_monster.current_path.is_none() {
-            if let Some(path) = map.find_path(my_monster, target_player.pos()) {
+            if let Some(path) = floor.find_path(my_monster, target_player.pos()) {
                 my_monster.current_path = Some((path, 1));
 
             }
@@ -256,10 +254,17 @@ fn attack_mode(my_monster: &mut SmallRat, players: &[Player], map: &Map) {
                 }
 
 
-            } else if let Some(path) = map.find_path(my_monster, target_player.pos()) {
+            } else if let Some(path) = floor.find_path(my_monster, target_player.pos()) {
                 my_monster.current_path = Some((path, 1));
 
             }
+
+        }
+
+        // If the player dies, go back to passive mode
+        if target_player.health() == 0.0 {
+            my_monster.attack_mode = AttackMode::Passive;
+            my_monster.current_target = None;
 
         }
 

@@ -8,7 +8,7 @@ mod draw;
 
 use std::{
     fs, 
-    collections::HashMap, f32::consts::PI, time::Instant
+    collections::HashMap, 
 };
 
 use attacks::*;
@@ -18,7 +18,7 @@ use draw::*;
 use input::*;
 use monsters::*;
 
-use macroquad::{prelude::*, ui::root_ui, miniquad::conf::{LinuxBackend, Platform}};
+use macroquad::{prelude::*, ui::root_ui, miniquad::conf::Platform};
 
 #[macroquad::main(window_conf)]
 async fn main() {
@@ -39,8 +39,8 @@ async fn main() {
     
     let mut monsters: Vec<Box<dyn Monster>> = Vec::new();
 
-    let map = Map::new(&textures, &mut monsters);
-    let mut players = vec![Player::new(map.current_spawn())];
+    let mut map = Map::new(&textures, &mut monsters);
+    let mut players = vec![Player::new(map.current_floor().current_spawn())];
 
     let mut camera = Camera2D {
         target: players[0].pos(),
@@ -66,12 +66,17 @@ async fn main() {
         }
 
         // Logic
-        keyboard_input(&mut players[0], &textures, &map);
+        keyboard_input(&mut players[0], &textures, map.current_floor());
         update_cooldowns(&mut players);
-        update_attacks(&mut players, &mut monsters, &map);
-        update_monsters(&mut monsters, &mut players, &map);
+        update_attacks(&mut players, &mut monsters, map.current_floor());
+        update_monsters(&mut monsters, &mut players, map.current_floor());
 
         camera.target = players[0].pos();
+
+        if map.current_floor().should_descend(&players, &monsters) {
+            map.descend(&mut players, &mut monsters, &textures)
+
+        }
 
         // Rendering
         clear_background(WHITE);
