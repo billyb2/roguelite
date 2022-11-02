@@ -34,6 +34,7 @@ impl Target {
 }
 
 const SIZE: f32 = 15.0;
+const MAX_HEALTH: f32 = 35.0;
 
 pub struct SmallRat {
     health: f32,
@@ -60,11 +61,10 @@ impl Monster for SmallRat {
 
         Self {
             pos,
-            health: 35.0,
+            health: MAX_HEALTH,
             texture: *textures.get("generic_monster.webp").unwrap(),
             attack_mode: AttackMode::Passive,
-            // 3.0 seconds at 60 fps
-            time_til_move: 0,
+            time_til_move: rand::gen_range(0_u32, 180).try_into().unwrap(),
             time_spent_moving: 0,
             current_path: None,
             current_target: None,
@@ -95,13 +95,16 @@ impl Monster for SmallRat {
         });
     }
 
-    fn take_damage(&mut self, damage: f32, _map: &Map) {
+    fn take_damage(&mut self, damage: f32, damage_direction: f32, _map: &Map) {
         self.health -= damage;
 
         if self.health < 0.0 {
             self.health = 0.0;
 
         }
+
+        // "Flinch" away from damage
+        self.pos += Vec2::new(damage_direction.cos(), damage_direction.sin()) * self.size() * (damage / (MAX_HEALTH / 2.0));
 
     }
 
@@ -123,13 +126,11 @@ fn passive_mode(my_monster: &mut SmallRat, players: &[Player], map: &Map) {
         *map.current_room().background_objects().iter().filter_map(|o| {
             let obj_distance = o.pos().distance(my_monster.pos);
 
-            if obj_distance > (TILE_SIZE * 5) as f32 && obj_distance < (TILE_SIZE * 8) as f32 {
-                Some(o.pos())
-
-            } else {
-                None
-
+            match obj_distance > (TILE_SIZE * 5) as f32 && obj_distance < (TILE_SIZE * 8) as f32 {
+                true => Some(o.pos()),
+                false => None,
             }
+
         }).collect::<Vec<Vec2>>().choose().unwrap()
     };
 
@@ -159,8 +160,10 @@ fn passive_mode(my_monster: &mut SmallRat, players: &[Player], map: &Map) {
                     *i += 1;
 
                 } else {
+                    const PASSIVE_SPEED: f32 = 0.7;
+
                     let angle = get_angle(pos.x, pos.y, my_monster.pos.x, my_monster.pos.y);
-                    my_monster.pos += Vec2::new(angle.cos(), angle.sin()) * 0.7;
+                    my_monster.pos += Vec2::new(angle.cos(), angle.sin()) * PASSIVE_SPEED;
 
                 }
 

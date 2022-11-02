@@ -58,7 +58,7 @@ pub trait AsAABB {
     fn as_aabb(&self) -> AxisAlignedBoundingBox;
 }
 
-pub fn aabb_collision(aabb1: &dyn AsAABB, aabb2: &dyn AsAABB, distance: Vec2) -> bool {
+pub fn aabb_collision<A: AsAABB, B: AsAABB>(aabb1: &A, aabb2: &B, distance: Vec2) -> bool {
     const TWO: Vec2 = Vec2::splat(2.0);
 
     let mut obj1 = aabb1.as_aabb();

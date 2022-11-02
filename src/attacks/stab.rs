@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{player::Player, draw::Drawable, map::{Map, self}, monsters::Monster, math::{AsAABB, AxisAlignedBoundingBox, aabb_collision}};
+use crate::{player::Player, draw::Drawable, map::{Map, self}, monsters::Monster, math::{AsAABB, AxisAlignedBoundingBox, aabb_collision, get_angle}};
 use macroquad::prelude::*;
 
 use super::Attack;
@@ -46,7 +46,9 @@ impl Attack for Stab {
         // Check to see if it's collided with a monster
         if let Some(monster) = monsters.iter_mut().find(|m| aabb_collision(self, &m.as_aabb(), Vec2::ZERO)) {
             const DAMAGE: f32 = 25.0;
-            monster.take_damage(DAMAGE, map);
+
+            let damage_direction = get_angle(monster.pos().x, monster.pos().y, self.pos.x, self.pos.y);
+            monster.take_damage(DAMAGE, damage_direction, map);
 
             return true;
 

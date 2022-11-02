@@ -51,12 +51,12 @@ pub struct Map {
 }
 
 pub const TILE_SIZE: usize = 25;
-const TILE_WIDTH: usize = 50;
-const TILE_HEIGHT: usize = 50;
+pub const MAP_WIDTH_TILES: usize = 50;
+pub const MAP_HEIGHT_TILES: usize = 50;
 
 impl Map {
     pub fn new(textures: &HashMap<String, Texture2D>, monsters: &mut Vec<Box<dyn Monster>>) -> Self {
-        let map_gen = MapBuilder::<NoData>::new(TILE_WIDTH, TILE_HEIGHT)
+        let map_gen = MapBuilder::<NoData>::new(MAP_WIDTH_TILES, MAP_HEIGHT_TILES)
             .with(NoiseGenerator::new(0.55))
             .with(CellularAutomata::new())
             .with(AreaStartingPosition::new(XStart::CENTER, YStart::CENTER))
@@ -64,8 +64,8 @@ impl Map {
             .build();
 
         let tile_to_object = |i: usize, texture: Texture2D| -> Object {
-            let x_pos = (i % TILE_WIDTH) * TILE_SIZE;
-            let y_pos = (i / TILE_HEIGHT) * TILE_SIZE;
+            let x_pos = (i % MAP_WIDTH_TILES) * TILE_SIZE;
+            let y_pos = (i / MAP_HEIGHT_TILES) * TILE_SIZE;
             
             Object {
                 pos: Vec2::new(x_pos as f32, y_pos as f32),
@@ -98,13 +98,19 @@ impl Map {
 
         let spawn = background_objects.iter().find_map(|o| {
             // First, find any points greater than half the map
-            if o.pos.distance(exit_pos) < ((TILE_WIDTH * TILE_SIZE) / 2) as f32 {
-                return Some(o.pos);
+            if o.pos.distance(exit_pos) < ((MAP_WIDTH_TILES * TILE_SIZE) / 2) as f32 {
+                return None;
 
             } 
 
+            let aabb = AxisAlignedBoundingBox {
+                pos: o.pos + Vec2::splat(TILE_SIZE as f32 / 2.0) - Vec2::splat(PLAYER_SIZE / 2.0),
+                size: Vec2::splat(PLAYER_SIZE),
+
+            };
+
             // Then, only keep background objects with a definite path to the exit
-            match find_path(o, exit_pos, &collidable_objects).is_some() {
+            match find_path(&aabb, exit_pos, &collidable_objects).is_some() {
                 true => Some(o.pos),
                 false => None,
             }
@@ -125,7 +131,7 @@ impl Map {
         };
 
 
-        monsters.extend((0..50).map(|_| {
+        monsters.extend((0..200).map(|_| {
             let monster: Box<dyn Monster> = Box::new(SmallRat::new(textures, &map));
             monster
         }));
@@ -139,7 +145,7 @@ impl Map {
 
     }
 
-    pub fn collision(&self, aabb: &dyn AsAABB, distance: Vec2) -> bool {
+    pub fn collision<A: AsAABB>(&self, aabb: &A, distance: Vec2) -> bool {
         let current_room = &self.rooms[self.current_room_index];
 
         current_room.collidable_objects.iter().any(|object| 
@@ -197,26 +203,12 @@ impl Drawable for Map {
 
 }
 
-fn tile_distance(tile_index: usize, other_tile_index: usize) -> OrderedFloat<f32> {
-    let x_pos = (tile_index % TILE_WIDTH) * TILE_SIZE;
-    let y_pos = (tile_index / TILE_HEIGHT) * TILE_SIZE;
-
-    let tile1 = Vec2::new(x_pos as f32, y_pos as f32);
-
-    let other_x_pos = (other_tile_index % TILE_WIDTH) * TILE_SIZE;
-    let other_y_pos = (other_tile_index / TILE_HEIGHT) * TILE_SIZE;
-
-    let tile2 = Vec2::new(other_x_pos as f32, other_y_pos as f32);
-
-    OrderedFloat(tile1.distance_squared(tile2))
-
-}
-
 // (X, Y), DISTANCE_BETWEENE
 type Viability = ((OrderedFloat<f32>, OrderedFloat<f32>), OrderedFloat<f32>);
 
 fn find_viable_neighbors(collidable_objects: &[Object], size: Vec2, (OrderedFloat(pos_x), OrderedFloat(pos_y)): (OrderedFloat<f32>, OrderedFloat<f32>)) -> Vec<Viability> {
     let pos = Vec2::new(pos_x, pos_y);
+    let size_squared = ((size.x + size.y) / 2.0).powi(2);
 
     [Vec2::new(-1.0, 0.0), Vec2::new(1.0, 0.0), Vec2::new(0.0, -1.0), Vec2::new(0.0, 1.0)].into_iter().filter_map(|change| {
         let new_pos = pos + change * size;
@@ -235,7 +227,7 @@ fn find_viable_neighbors(collidable_objects: &[Object], size: Vec2, (OrderedFloa
             false => {
                 Some((
                     (OrderedFloat(new_pos.x), OrderedFloat(new_pos.y)), 
-                    OrderedFloat(pos.distance_squared(new_pos))
+                    OrderedFloat(size_squared)
                 ))
 
             },

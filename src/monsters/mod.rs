@@ -6,7 +6,7 @@ use crate::{
     draw::Drawable, 
     math::{AsAABB, AxisAlignedBoundingBox}, 
     player::Player, 
-    map::Map
+    map::{Map, TILE_SIZE, MAP_WIDTH_TILES, MAP_HEIGHT_TILES}
 };
 
 use macroquad::prelude::*;
@@ -20,7 +20,7 @@ pub trait Monster: AsAABB + Drawable + Send {
     // Movement and damaging players are seperate so that the movement part can be run in parallel
     fn movement(&mut self, players: &[Player], map: &Map);
     fn damage_players(&mut self, players: &mut [Player], map: &Map);
-    fn take_damage(&mut self, damage: f32, map: &Map);
+    fn take_damage(&mut self, damage: f32, damage_direction: f32, map: &Map);
     fn living(&self) -> bool;
     fn into_aabb_obj(&self) -> AxisAlignedBoundingBox{
         self.as_aabb()
