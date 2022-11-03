@@ -3,10 +3,6 @@ name = "roguelite"
 version = "0.1.0"
 edition = "2021"
 
-[profile.dev]
-debug = true
-opt-level = 1
-
 [profile.dev.package."*"]
 opt-level = 3
 
@@ -20,4 +16,3 @@ rayon = { version = "1" }
 here_be_dragons = { version = "0.2", default-features = false }
 image = { version = "*", default-features = false, features = ["webp"] }
 pathfinding = { version = "3", default-features = false }
-ordered-float = { version = "3", default-features = false }

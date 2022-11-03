@@ -1,8 +1,10 @@
+use std::collections::HashMap;
+
 use macroquad::prelude::*;
 use crate::{
     draw::Drawable, 
     map::Floor, 
-    math::{AsAABB, AxisAlignedBoundingBox}, attacks::Attack
+    math::{AsAABB, AxisAlignedBoundingBox}, attacks::Attack, monsters::Monster
 };
 
 pub const PLAYER_SIZE: f32 = 12.0;
@@ -128,5 +130,13 @@ pub fn update_cooldowns(players: &mut [Player]) {
         p.invincibility_frames = p.invincibility_frames.saturating_sub(1);
 
     });
+
+}
+
+pub fn primary_attack(player: &mut Player, textures: &HashMap<String, Texture2D>, monsters: &mut [Box<dyn Monster>]) {
+
+}
+
+pub fn secondary_attack(player: &mut Player, textures: &HashMap<String, Texture2D>, monsters: &mut [Box<dyn Monster>]) {
 
 }

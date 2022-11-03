@@ -269,7 +269,7 @@ fn attack_mode(my_monster: &mut SmallRat, players: &[Player], floor: &Floor) {
         }
 
         // When the monster's within range of the player, "lunge" at them
-        if distance_from_target <= SIZE * 1.5 {
+        if distance_from_target <= TILE_SIZE as f32 {
             let angle = get_angle(target_player.pos().x, target_player.pos().y, my_monster.pos.x, my_monster.pos.y);
             my_monster.pos += Vec2::new(angle.cos(), angle.sin()) * SIZE;
             my_monster.time_til_move = 45;

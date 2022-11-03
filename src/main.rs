@@ -81,6 +81,7 @@ async fn main() {
         // Rendering
         clear_background(WHITE);
 
+        camera.zoom.y = -0.005 * (screen_width() / screen_height());
         set_camera(&camera);
 
         map.draw();

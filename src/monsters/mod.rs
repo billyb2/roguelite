@@ -11,7 +11,7 @@ use crate::{
 
 use macroquad::prelude::*;
 
-use rayon::prelude::{IntoParallelRefMutIterator, ParallelIterator};
+use rayon::{prelude::{IntoParallelRefMutIterator, ParallelIterator}, slice::ParallelSliceMut};
 pub use small_rat::*;
 
 // All monsters are required to have a drawable AABB and be drawable
@@ -30,17 +30,10 @@ pub trait Monster: AsAABB + Drawable + Send {
 }
 
 pub fn update_monsters(monsters: &mut Vec<Box<dyn Monster>>, players: &mut [Player], floor: &Floor) {
-    monsters.par_iter_mut().for_each(|m| {
+    // Each thread does 4 monsters at a time, since inidividual monsters aren't too expensive
+    monsters.par_chunks_mut(4).for_each(|monsters| {
         // Only move monsters that are within a certain distance of any player
-        let close_to_a_player = players.iter().any(|p| {
-            p.pos().distance(m.pos()) <= (TILE_SIZE * (MAP_WIDTH_TILES + MAP_HEIGHT_TILES) / 2) as f32 * 0.25
-
-        });
-
-        if close_to_a_player {
-            m.movement(players, floor);
-
-        }
+        monsters.iter_mut().for_each(|m| m.movement(players, floor));
 
     });
 

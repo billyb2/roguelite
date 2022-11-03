@@ -2,17 +2,20 @@ use std::collections::HashMap;
 
 use macroquad::{prelude::*, rand::ChooseRandom};
 use here_be_dragons::*;
-use ordered_float::OrderedFloat;
 use pathfinding::prelude::*;
+use rayon::prelude::*;
 
 use crate::{
     draw::Drawable, 
     math::{AsAABB, aabb_collision, AxisAlignedBoundingBox}, monsters::{Monster, SmallRat}, player::{PLAYER_SIZE, Player}};
 
+pub const TILE_SIZE: usize = 25;
+pub const MAP_WIDTH_TILES: usize = 50;
+pub const MAP_HEIGHT_TILES: usize = 50;
+
 #[derive(Clone)]
 pub struct Object {
-    pos: Vec2,
-    size: Vec2,
+    pos: IVec2,
     texture: Texture2D,
 
 }
@@ -20,8 +23,8 @@ pub struct Object {
 impl AsAABB for Object {
     fn as_aabb(&self) -> AxisAlignedBoundingBox {
         AxisAlignedBoundingBox { 
-            pos: self.pos, 
-            size: self.size,
+            pos: self.pos.as_vec2() * Vec2::splat(TILE_SIZE as f32), 
+            size: Vec2::splat(TILE_SIZE as f32),
         }
         
     }
@@ -56,72 +59,82 @@ impl Floor {
     }
 
     pub fn new(_floor_num: usize, textures: &HashMap<String, Texture2D>) -> Self {
-        let map_gen = MapBuilder::<NoData>::new(MAP_WIDTH_TILES, MAP_HEIGHT_TILES)
-            .with(NoiseGenerator::new(0.55))
-            .with(CellularAutomata::new())
-            .with(AreaStartingPosition::new(XStart::CENTER, YStart::CENTER))
-            .with(DistantExit::new())
-            .build();
+        let mut spawn = None;
+        let mut exit = None;
 
-        let tile_to_object = |i: usize, texture: Texture2D| -> Object {
-            let x_pos = (i % MAP_WIDTH_TILES) * TILE_SIZE;
-            let y_pos = (i / MAP_HEIGHT_TILES) * TILE_SIZE;
-            
-            Object {
-                pos: Vec2::new(x_pos as f32, y_pos as f32),
-                size: Vec2::splat(TILE_SIZE as f32),
-                texture,
+        let (mut collidable_objects, mut background_objects) = (Vec::new(), Vec::new());
 
-            }
+        // Keep trying to generate a map until it generates a valid one
+        while spawn.is_none() {
+            collidable_objects.clear();
+            background_objects.clear();
 
-        };
+            let map_gen = MapBuilder::<NoData>::new(MAP_WIDTH_TILES, MAP_HEIGHT_TILES)
+                .with(NoiseGenerator::new(0.50))
+                .with(CellularAutomata::new())
+                .with(AreaStartingPosition::new(XStart::CENTER, YStart::CENTER))
+                .with(DistantExit::new())
+                .build();
 
-        let (collidable_objects, background_objects): (Vec<_>, Vec<_>) = map_gen.tiles.iter().enumerate().map(|(i, t)| (t.is_blocked(), i)).partition(|(is_blocked, _)| *is_blocked);
+            let tile_to_object = |i: usize, texture: Texture2D| -> Object {
+                let x_pos = i % MAP_WIDTH_TILES;
+                let y_pos = i / MAP_HEIGHT_TILES;
 
-        let collidable_object_texture = *textures.get("black.webp").unwrap();
-        let background_object_texture = *textures.get("light_gray.webp").unwrap();
+                Object {
+                    pos: IVec2::new(x_pos.try_into().unwrap(), y_pos.try_into().unwrap()),
+                    texture,
 
-        let collidable_objects: Vec<Object> = collidable_objects.into_iter().map(|(_, i)| tile_to_object(i, collidable_object_texture)).collect();
-        let mut background_objects: Vec<Object> = background_objects.into_iter().map(|(_, i)| tile_to_object(i, background_object_texture)).collect();
-
-
-        let exit_pos = map_gen.exit_point.map(|p| Vec2::new(p.x as f32, p.y as f32) * Vec2::splat(TILE_SIZE as f32)).unwrap();
-
-        let exit = Object {
-            pos: exit_pos,
-            size: Vec2::splat(TILE_SIZE as f32),
-            texture: *textures.get("green.webp").unwrap(),
-
-        };
-
-        background_objects.shuffle();
-
-        let spawn = background_objects.iter().find_map(|o| {
-            // First, find any points greater than half the map
-            if o.pos.distance(exit_pos) < ((MAP_WIDTH_TILES * TILE_SIZE) / 2) as f32 {
-                return None;
-
-            } 
-
-            let aabb = AxisAlignedBoundingBox {
-                pos: o.pos + Vec2::splat(TILE_SIZE as f32 / 2.0) - Vec2::splat(PLAYER_SIZE / 2.0),
-                size: Vec2::splat(PLAYER_SIZE),
+                }
 
             };
 
-            // Then, only keep background objects with a definite path to the exit
-            match find_path(&aabb, exit_pos, &collidable_objects).is_some() {
-                true => Some(o.pos),
-                false => None,
-            }
+            let (collidable_tiles, background_tiles): (Vec<_>, Vec<_>) = map_gen.tiles.iter().enumerate().map(|(i, t)| (t.is_blocked(), i)).partition(|(is_blocked, _)| *is_blocked);
 
-        }).unwrap();
+            let collidable_object_texture = *textures.get("black.webp").unwrap();
+            let background_object_texture = *textures.get("light_gray.webp").unwrap();
+
+            collidable_objects.extend(collidable_tiles.into_iter().map(|(_, i)| tile_to_object(i, collidable_object_texture)));
+            background_objects.extend(background_tiles.into_iter().map(|(_, i)| tile_to_object(i, background_object_texture)));
+
+            let exit_point = map_gen.exit_point.unwrap();
+            let exit_pos = IVec2::new(exit_point.x.try_into().unwrap(), exit_point.y.try_into().unwrap());
+
+            exit = Some(Object {
+                pos: exit_pos,
+                texture: *textures.get("green.webp").unwrap(),
+
+            });
+
+            background_objects.shuffle();
+
+            spawn = background_objects.par_iter().find_map_any(|o| {
+                // First, find any points greater than half the map
+                if distance_squared(o.pos, exit_pos) < ((MAP_WIDTH_TILES * TILE_SIZE) / 2) as i32 {
+                    return None;
+
+                } 
+
+                let aabb = AxisAlignedBoundingBox {
+                    pos: o.pos.as_vec2() * Vec2::splat(TILE_SIZE as f32) + Vec2::splat(PLAYER_SIZE / 2.0),
+                    size: Vec2::splat(PLAYER_SIZE),
+
+                };
+
+                // Then, only keep background objects with a definite path to the exit
+                match find_path(&aabb, exit_pos.as_vec2() * Vec2::splat(TILE_SIZE as f32), &collidable_objects).is_some() {
+                    true => Some(o.pos.as_vec2() * Vec2::splat(TILE_SIZE as f32)),
+                    false => None,
+                }
+
+            });
+
+        }
 
         Floor {
-            spawn,
+            spawn: spawn.unwrap(),
             collidable_objects,
             background_objects,
-            exit,
+            exit: exit.unwrap(),
 
         }
 
@@ -148,10 +161,6 @@ pub struct Map {
     rooms: Vec<Floor>,
 
 }
-
-pub const TILE_SIZE: usize = 25;
-pub const MAP_WIDTH_TILES: usize = 50;
-pub const MAP_HEIGHT_TILES: usize = 50;
 
 impl Map {
     pub fn new(textures: &HashMap<String, Texture2D>, monsters: &mut Vec<Box<dyn Monster>>) -> Self {
@@ -196,11 +205,11 @@ impl Map {
 
 impl Drawable for Object {
     fn pos(&self) -> Vec2 {
-        self.pos
+        self.pos.as_vec2() * Vec2::splat(TILE_SIZE as f32)
     }
 
     fn size(&self) -> Vec2 {
-         self.size
+         Vec2::splat(TILE_SIZE as f32)
      }
 
     fn texture(&self) -> Option<Texture2D> {
@@ -229,56 +238,57 @@ impl Drawable for Map {
 
 }
 
-// (X, Y), DISTANCE_BETWEEN
-type Viability = ((OrderedFloat<f32>, OrderedFloat<f32>), OrderedFloat<f32>);
+fn find_viable_neighbors(collidable_objects: &[Object], pos: IVec2) -> Vec<(IVec2, i32)> {
+    let mut potential_neighbors = {
+        let mut positions = [Some(pos); 4];
+        let changes = [IVec2::new(-1, 0), IVec2::new(1, 0), IVec2::new(0, -1), IVec2::new(0, 1)];
 
-fn find_viable_neighbors(collidable_objects: &[Object], size: Vec2, (OrderedFloat(pos_x), OrderedFloat(pos_y)): (OrderedFloat<f32>, OrderedFloat<f32>)) -> Vec<Viability> {
-    let pos = Vec2::new(pos_x, pos_y);
-    let size_squared = ((size.x + size.y) / 2.0).powi(2);
+        positions.iter_mut().zip(changes.into_iter()).for_each(|(p, change)| {
+            let new_pos = p.unwrap() + change;
 
-    [Vec2::new(-1.0, 0.0), Vec2::new(1.0, 0.0), Vec2::new(0.0, -1.0), Vec2::new(0.0, 1.0)].into_iter().filter_map(|change| {
-        let new_pos = pos + change * size;
-        let aabb = AxisAlignedBoundingBox {
-            pos: new_pos,
-            size,
-        };
+            if new_pos.x < 0 || new_pos.x >= MAP_WIDTH_TILES.try_into().unwrap() || new_pos.y < 0 || new_pos.y >= MAP_HEIGHT_TILES.try_into().unwrap() {
+                *p = None;
 
-        let collision = collidable_objects.iter().any(|o| {
-            aabb_collision(o, &aabb, Vec2::ZERO)
+            } else {
+                *p = Some(new_pos);
+
+            }
+
         });
 
-        match collision {
-            true => None,
-            // Return the center of each object
-            false => {
-                Some((
-                    (OrderedFloat(new_pos.x), OrderedFloat(new_pos.y)), 
-                    OrderedFloat(size_squared)
-                ))
+        positions
+    };
 
-            },
-        }
+    collidable_objects.iter().for_each(|c| {
+        potential_neighbors.iter_mut().for_each(|p| {
+            if let Some(p_clone) = *p {
+                // If any potential_neighbors are a collidable object, remove them from the pool
+                if p_clone == c.pos {
+                    *p = None;
+                }
+            }
+        })
+    });
 
-    }).collect()
+    potential_neighbors.iter().filter_map(|p| p.map(|p| (p, 1))).collect()
 
 }
 
 pub fn find_path(start: &dyn AsAABB, goal: Vec2, collidable_objects: &[Object]) -> Option<Vec<Vec2>> {
     let aabb = start.as_aabb();
-    let pos = aabb.pos;
-    
-    let avg_size = (aabb.size.x + aabb.size.y) / 2.0;
 
+    let start_tile_pos = (aabb.pos / Vec2::splat(TILE_SIZE as f32)).as_ivec2();
+    let goal_tile_pos = (goal / Vec2::splat(TILE_SIZE as f32)).as_ivec2();
+    
     let path = astar(
-        &(OrderedFloat(pos.x), OrderedFloat(pos.y)), 
-        |pos| find_viable_neighbors(collidable_objects, aabb.size, *pos), 
-        |(OrderedFloat(pos_x), OrderedFloat(pos_y))| OrderedFloat(Vec2::new(*pos_x, *pos_y).distance_squared(goal)), 
-        // The goal is reached when we're fairly close to it
-        |(OrderedFloat(pos_x), OrderedFloat(pos_y))| Vec2::new(*pos_x, *pos_y).distance(goal) <= avg_size,
+        &start_tile_pos, 
+        |pos| find_viable_neighbors(collidable_objects, *pos), 
+        |pos| distance_squared(*pos, goal_tile_pos), 
+        |pos| *pos == goal_tile_pos,
     );
 
-    path.map(|(positions, _)| positions.iter().map(|(OrderedFloat(pos_x), OrderedFloat(pos_y))| {
-        Vec2::new(*pos_x, *pos_y) + (aabb.size / 2.0)
+    path.map(|(positions, _)| positions.iter().map(|pos| {
+        (*pos * IVec2::splat(TILE_SIZE as i32)).as_vec2() - (aabb.size * 0.25)
     }).collect())
 
 }
@@ -293,4 +303,18 @@ fn spawn_monsters(_floor_num: usize, monsters: &mut Vec<Box<dyn Monster>>, textu
 
     );
 
+}
+
+fn distance(pos1: IVec2, pos2: IVec2) -> f32 {
+    let distance_squared = distance_squared(pos1, pos2);
+
+    (distance_squared as f32).sqrt()
+
+}
+
+fn distance_squared(pos1: IVec2, pos2: IVec2) -> i32 {
+    let mut diff = pos2 - pos1;
+    diff = diff * diff;
+
+    diff.x + diff.y
 }
