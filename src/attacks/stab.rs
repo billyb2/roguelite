@@ -45,12 +45,12 @@ impl Attack for Stab {
 
         // Check to see if it's collided with a monster
         if let Some(monster) = monsters.iter_mut().find(|m| aabb_collision(self, &m.as_aabb(), Vec2::ZERO)) {
-            const DAMAGE: f32 = 25.0;
+            const DAMAGE: f32 = 11.0;
 
             let damage_direction = get_angle(monster.pos().x, monster.pos().y, self.pos.x, self.pos.y);
             monster.take_damage(DAMAGE, damage_direction, floor);
 
-            return true;
+            //return false;
 
         }
 

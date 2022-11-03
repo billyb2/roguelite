@@ -71,7 +71,6 @@ async fn main() {
         update_attacks(&mut players, &mut monsters, map.current_floor());
         update_monsters(&mut monsters, &mut players, map.current_floor());
 
-        camera.target = players[0].pos();
 
         if map.current_floor().should_descend(&players, &monsters) {
             map.descend(&mut players, &mut monsters, &textures)
@@ -81,6 +80,7 @@ async fn main() {
         // Rendering
         clear_background(WHITE);
 
+        camera.target = players[0].pos();
         camera.zoom.y = -0.005 * (screen_width() / screen_height());
         set_camera(&camera);
 
