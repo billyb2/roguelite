@@ -1,12 +1,15 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::{
     player::{Player, damage_player},
     monsters::Monster,
     math::{AsAABB, AxisAlignedBoundingBox, get_angle, aabb_collision}, 
-    draw::Drawable, map::{TILE_SIZE, Floor},
+    draw::Drawable, map::{TILE_SIZE, Floor}, enchantments::{Enchantment, EnchantmentKind},
 };
+
 use macroquad::{prelude::*, rand::ChooseRandom};
+
+use super::Effect;
 
 enum AttackMode {
     Passive,
@@ -31,7 +34,7 @@ impl Target {
     }
 }
 
-const SIZE: f32 = 15.0;
+const SIZE: f32 = 22.5;
 const MAX_HEALTH: f32 = 35.0;
 
 pub struct SmallRat {
@@ -42,6 +45,7 @@ pub struct SmallRat {
     time_spent_moving: u16,
     time_til_move: u16,
     current_path: Option<(Vec<Vec2>, usize)>,
+    enchantments: HashMap<EnchantmentKind, Effect>,
     // Gotta keep track of if the target moved, to reset the path
     current_target: Option<Target>,
 
@@ -60,23 +64,30 @@ impl Monster for SmallRat {
         Self {
             pos,
             health: MAX_HEALTH,
-            texture: *textures.get("generic_monster.webp").unwrap(),
+            texture: *textures.get("small_mouse.webp").unwrap(),
             attack_mode: AttackMode::Passive,
             time_til_move: rand::gen_range(0_u32, 180).try_into().unwrap(),
             time_spent_moving: 0,
             current_path: None,
             current_target: None,
+            enchantments: HashMap::new(),
 
         }
 
     }
 
-    fn movement(&mut self, players: &[Player], map: &Floor) {
-        match self.attack_mode {
-            AttackMode::Passive => passive_mode(self, players, map),
-            AttackMode::Attacking => attack_mode(self, players, map),
+    fn movement(&mut self, players: &[Player], floor: &Floor) {
+        if self.enchantments.contains_key(&EnchantmentKind::Blinded) {
+            move_blindly(self, floor);
 
-        };
+        } else {
+            match self.attack_mode {
+                AttackMode::Passive => passive_mode(self, players, floor),
+                AttackMode::Attacking => attack_mode(self, players, floor),
+
+            };
+
+        }
 
     }
 
@@ -93,7 +104,7 @@ impl Monster for SmallRat {
         });
     }
 
-    fn take_damage(&mut self, damage: f32, damage_direction: f32, _floor: &Floor) {
+    fn take_damage(&mut self, damage: f32, damage_direction: f32, floor: &Floor) {
         self.health -= damage;
 
         if self.health < 0.0 {
@@ -101,15 +112,70 @@ impl Monster for SmallRat {
 
         }
 
+        if let Some(effect) = self.enchantments.get_mut(&EnchantmentKind::Blinded) {
+            // Reduce the amount of time left on blindness whenever the rat takes damage
+            effect.frames_left /= 2;
+
+        }
+
         // "Flinch" away from damage
-        self.pos += Vec2::new(damage_direction.cos(), damage_direction.sin()) * self.size() * (damage / (MAX_HEALTH / 2.0));
+        let change = Vec2::new(damage_direction.cos(), damage_direction.sin()) * self.size() * (damage / (MAX_HEALTH / 2.0));
+        
+        if !floor.collision(self, change) {
+            self.pos += change;
+
+        }
+
+    }
+
+    fn apply_enchantment(&mut self, enchantment: Enchantment) {
+        match enchantment.kind {
+            EnchantmentKind::Blinded => {
+                self.current_target = None;
+                self.current_path = None;
+                self.time_til_move = 50;
+
+            },
+
+        };
+
+        self.enchantments.insert(enchantment.kind, Effect {
+            frames_left: 240,
+            enchantment,
+
+        });
+
+        
+    }
+
+    fn update_enchantments(&mut self) {
+        self.enchantments.retain(|e_kind, effect| {
+            effect.frames_left = effect.frames_left.saturating_sub(1);
+            let removing_enchantment = effect.frames_left == 0;
+
+            if removing_enchantment {
+                match e_kind {
+                    EnchantmentKind::Blinded => {
+                        self.attack_mode = AttackMode::Passive;
+                        self.time_til_move = 10;
+                        self.time_spent_moving = 0;
+                        self.current_target = None;
+                        self.current_path = None;
+                    },
+
+                }
+
+            }
+
+            !removing_enchantment
+
+        });
 
     }
 
     fn living(&self) -> bool {
         self.health > 0.0
     }
-
 
 }
 
@@ -185,6 +251,7 @@ fn passive_mode(my_monster: &mut SmallRat, players: &[Player], floor: &Floor) {
 
         my_monster.attack_mode = AttackMode::Attacking;
         my_monster.current_target = Some(Target::PlayerIndex(i));
+        my_monster.current_path = None;
 
     }
     
@@ -280,6 +347,50 @@ fn attack_mode(my_monster: &mut SmallRat, players: &[Player], floor: &Floor) {
     
 }
 
+fn move_blindly(my_monster: &mut SmallRat, floor: &Floor) {
+    if my_monster.time_til_move > 0 {
+        my_monster.time_til_move = my_monster.time_til_move.saturating_sub(1);
+        return;
+
+    }
+
+    if let Some(Target::Pos(pos)) = my_monster.current_target {
+        if pos.distance(my_monster.pos) < SIZE as f32 {
+            my_monster.current_target = None;
+
+        }
+
+        let angle = get_angle(pos.x, pos.y, my_monster.pos.x, my_monster.pos.y);
+        let change = Vec2::new(angle.cos(), angle.sin()) * Vec2::splat(1.2);
+
+        if !floor.collision(my_monster, change) {
+            my_monster.pos += change;
+
+        } else {
+            let change = change * 1.5;
+            if !floor.collision(my_monster, -change) {
+                my_monster.pos -= change;
+
+            }
+            my_monster.current_target = None;
+            //my_monster.time_til_move = 30;
+
+        }
+
+
+
+    } else {
+        let direction = Vec2::new(
+            rand::gen_range(-1.0, 1.0),
+            rand::gen_range(-1.0, 1.0),
+        );
+        
+        my_monster.current_target = Some(Target::Pos( direction * Vec2::splat((TILE_SIZE * 2) as f32) + my_monster.pos + Vec2::splat(SIZE * 0.25) ));
+
+    }
+
+}
+
 impl AsAABB for SmallRat {
     fn as_aabb(&self) -> AxisAlignedBoundingBox {
         AxisAlignedBoundingBox {
@@ -304,6 +415,11 @@ impl Drawable for SmallRat {
             _ => Vec2::splat(SIZE),
 
         }
+    }
+
+    fn flip_x(&self) -> bool {
+        true
+
     }
 
     fn texture(&self) -> Option<Texture2D> {

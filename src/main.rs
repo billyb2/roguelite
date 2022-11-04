@@ -5,10 +5,11 @@ mod math;
 mod map;
 mod monsters;
 mod draw;
+mod enchantments;
 
 use std::{
     fs, 
-    collections::HashMap, 
+    collections::HashMap, io::{self, Write}, 
 };
 
 use attacks::*;
@@ -22,25 +23,47 @@ use macroquad::{prelude::*, ui::root_ui, miniquad::conf::Platform};
 
 #[macroquad::main(window_conf)]
 async fn main() {
-    let mut textures = HashMap::new();
+    print!("What player class are you? Warrior or Wizard?: ");
+    io::stdout().flush().unwrap();
+    
+    let mut class = String::new();
+    io::stdin().read_line(&mut class).unwrap();
 
-    fs::read_dir("assets").unwrap().for_each(|file| {
+    class = class.to_lowercase();
+    class.pop();
+
+
+    let class = 
+        match class.is_empty() {
+            true => PlayerClass::Wizard,
+            false => match class.as_str() {
+                "warrior" => PlayerClass::Warrior,
+                "wizard" | "." => PlayerClass::Wizard,
+                c => panic!("Invalid class given: {c}"),
+            },
+
+        };
+
+    let textures: HashMap<String, Texture2D> = fs::read_dir("assets").unwrap().filter_map(|file| {
         if let Ok(file) = file {
             let file_name = file.file_name().to_str().unwrap().to_string();
 
             let image_bytes = fs::read(file.path()).unwrap();
-            let texture = Texture2D::from_file_with_format(&image_bytes, Some(ImageFormat::WebP));
+            let texture = Texture2D::from_file_with_format(&image_bytes, None);
 
-            textures.insert(file_name, texture);
+            Some((file_name, texture))
+
+        } else {
+            None
 
         }
 
-    });
+    }).collect();
     
     let mut monsters: Vec<Box<dyn Monster>> = Vec::new();
 
     let mut map = Map::new(&textures, &mut monsters);
-    let mut players = vec![Player::new(map.current_floor().current_spawn())];
+    let mut players = vec![Player::new(class, map.current_floor().current_spawn())];
 
     let mut camera = Camera2D {
         target: players[0].pos(),
@@ -66,7 +89,7 @@ async fn main() {
         }
 
         // Logic
-        keyboard_input(&mut players[0], &textures, map.current_floor());
+        keyboard_input(&mut players[0], &mut monsters, &textures, map.current_floor());
         update_cooldowns(&mut players);
         update_attacks(&mut players, &mut monsters, map.current_floor());
         update_monsters(&mut monsters, &mut players, map.current_floor());

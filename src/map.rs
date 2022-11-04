@@ -45,11 +45,17 @@ impl Floor {
 
     }
 
-    pub fn collision<A: AsAABB>(&self, aabb: &A, distance: Vec2) -> bool {
-        self.collidable_objects.iter().any(|object| 
-            aabb_collision(aabb, object, distance)
+    // Same as collision, but returns the actual Object collided w.
+    pub fn collision_obj<A: AsAABB>(&self, aabb: &A, distance: Vec2) -> Option<&Object> {
+        self.collidable_objects.iter().find(|object| 
+            aabb_collision(aabb, *object, distance)
 
         )
+
+    }
+
+    pub fn collision<A: AsAABB>(&self, aabb: &A, distance: Vec2) -> bool {
+        self.collision_obj(aabb, distance).is_some()
 
     }
 
@@ -295,7 +301,7 @@ pub fn find_path(start: &dyn AsAABB, goal: Vec2, collidable_objects: &[Object]) 
 
 fn spawn_monsters(_floor_num: usize, monsters: &mut Vec<Box<dyn Monster>>, textures: &HashMap<String, Texture2D>, floor: &Floor) {
     monsters.extend(
-        (0..25).map(|_| {
+        (0..35).map(|_| {
             let monster: Box<dyn Monster> = Box::new(SmallRat::new(textures, floor));
             monster
 

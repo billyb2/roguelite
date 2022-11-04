@@ -4,7 +4,7 @@ use macroquad::prelude::*;
 use crate::{
     draw::Drawable, 
     map::Floor, 
-    math::{AsAABB, AxisAlignedBoundingBox}, attacks::Attack, monsters::Monster
+    math::{AsAABB, AxisAlignedBoundingBox}, attacks::*, monsters::Monster
 };
 
 pub const PLAYER_SIZE: f32 = 12.0;
@@ -12,6 +12,7 @@ pub const PLAYER_SIZE: f32 = 12.0;
 #[derive(Copy, Clone)]
 pub enum PlayerClass {
     Warrior,
+    Wizard,
 
 }
 
@@ -22,19 +23,21 @@ pub struct Player {
     speed: f32,
     health: f32,
     invincibility_frames: u16, 
-    pub attack_cooldown: u16,
+    pub primary_cooldown: u16,
+    pub secondary_cooldown: u16,
     pub attacks: Vec<Box<dyn Attack>>,
 
 }
 
 impl Player {
-    pub fn new(pos: Vec2) -> Self {
+    pub fn new(class: PlayerClass, pos: Vec2) -> Self {
         Self {
+            class,
             pos,
             angle: 0.0,
-            class: PlayerClass::Warrior,
             speed: 2.2,
-            attack_cooldown: 0,
+            primary_cooldown: 0,
+            secondary_cooldown: 0,
             health: 100.0,
             invincibility_frames: 0,
             attacks: Vec::with_capacity(2),
@@ -126,17 +129,29 @@ pub fn damage_player(player: &mut Player, damage: f32, damage_direction: f32, fl
 
 pub fn update_cooldowns(players: &mut [Player]) {
     players.iter_mut().for_each(|p|  {
-        p.attack_cooldown = p.attack_cooldown.saturating_sub(1);
+        p.primary_cooldown = p.primary_cooldown.saturating_sub(1);
+        p.secondary_cooldown = p.secondary_cooldown.saturating_sub(1);
+
         p.invincibility_frames = p.invincibility_frames.saturating_sub(1);
 
     });
 
 }
 
-pub fn primary_attack(player: &mut Player, textures: &HashMap<String, Texture2D>, monsters: &mut [Box<dyn Monster>]) {
+pub fn primary_attack(player: &mut Player, textures: &HashMap<String, Texture2D>, monsters: &mut [Box<dyn Monster>], floor: &Floor) -> Box<dyn Attack> {
+    match player.class {
+        PlayerClass::Warrior => Slash::new(player, player.angle, textures, floor, true),
+        PlayerClass::Wizard => MagicMissile::new(player, player.angle, textures, floor, true),
+
+    }
 
 }
 
-pub fn secondary_attack(player: &mut Player, textures: &HashMap<String, Texture2D>, monsters: &mut [Box<dyn Monster>]) {
+pub fn secondary_attack(player: &mut Player, textures: &HashMap<String, Texture2D>, monsters: &mut [Box<dyn Monster>], floor: &Floor) -> Box<dyn Attack>{
+    match player.class {
+        PlayerClass::Warrior => Stab::new(player, player.angle, textures, floor, false),
+        PlayerClass::Wizard => BlindingLight::new(player, player.angle, textures, floor, false)
+
+    }
 
 }

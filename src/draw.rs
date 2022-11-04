@@ -11,6 +11,7 @@ pub trait Drawable {
         None
 
     }
+    fn flip_x(&self) -> bool { true }
     fn draw(&self) {
         let size = self.size();
         let pos = self.pos() - (size * Vec2::splat(0.25));
@@ -19,11 +20,12 @@ pub trait Drawable {
             Some(texture) => {
                 let texture_params = DrawTextureParams {
                     rotation: self.rotation(),
-                    flip_x: true,
+                    flip_x: self.flip_x(),
                     dest_size: Some(size),
                     ..Default::default()
 
                 };
+
                 draw_texture_ex(texture, pos.x, pos.y, WHITE, texture_params)
 
             },

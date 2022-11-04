@@ -1,14 +1,14 @@
 use std::collections::HashMap;
 
 use crate::{
-    player::{Player, move_player}, 
+    player::{Player, move_player, primary_attack, secondary_attack}, 
     math::get_angle,
     map::Floor, 
-    attacks::*,
+    attacks::*, monsters::Monster,
 };
 use macroquad::prelude::*;
 
-pub fn keyboard_input(player: &mut Player, textures: &HashMap<String, Texture2D>, floor: &Floor) {
+pub fn keyboard_input(player: &mut Player, monsters: &mut [Box<dyn Monster>], textures: &HashMap<String, Texture2D>, floor: &Floor) {
     if player.health() == 0.0 {
         return;
 
@@ -41,15 +41,13 @@ pub fn keyboard_input(player: &mut Player, textures: &HashMap<String, Texture2D>
     player.angle = get_angle(mouse_pos.x, mouse_pos.y, 0.0, 0.0);
 
     if is_mouse_button_down(MouseButton::Left) {
-        let slash = Slash::new(player, player.angle, textures, floor);
-        attack(slash, player);
+        attack(primary_attack(player, textures, monsters, floor), player, true);
 
 
     }
 
     if is_mouse_button_down(MouseButton::Right) {
-        let stab = Stab::new(player, player.angle, textures, floor);
-        attack(stab, player);
+        attack(secondary_attack(player, textures, monsters, floor), player, false);
 
     }
 
