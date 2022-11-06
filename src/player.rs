@@ -35,7 +35,7 @@ impl Player {
             class,
             pos,
             angle: 0.0,
-            speed: 2.2,
+            speed: 20.2,
             primary_cooldown: 0,
             secondary_cooldown: 0,
             health: 100.0,

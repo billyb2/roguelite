@@ -9,7 +9,7 @@ mod enchantments;
 
 use std::{
     fs, 
-    collections::HashMap, io::{self, Write}, 
+    collections::HashMap, io::{self, Write}, time::{SystemTime, UNIX_EPOCH}, 
 };
 
 use attacks::*;
@@ -23,6 +23,8 @@ use macroquad::{prelude::*, ui::root_ui, miniquad::conf::Platform};
 
 #[macroquad::main(window_conf)]
 async fn main() {
+    let time = SystemTime::elapsed(&UNIX_EPOCH).unwrap().as_secs();
+    rand::srand(time); 
     print!("What player class are you? Warrior or Wizard?: ");
     io::stdout().flush().unwrap();
     
@@ -67,8 +69,8 @@ async fn main() {
 
     let mut camera = Camera2D {
         target: players[0].pos(),
-        //zoom: Vec2::new(0.001, -0.001 * (screen_width() / screen_height())),
-        zoom: Vec2::new(0.005, -0.005 * (screen_width() / screen_height())),
+        zoom: Vec2::new(0.001, -0.001 * (screen_width() / screen_height())),
+        //zoom: Vec2::new(0.005, -0.005 * (screen_width() / screen_height())),
         ..Default::default()
     };
 
@@ -104,7 +106,7 @@ async fn main() {
         clear_background(WHITE);
 
         camera.target = players[0].pos();
-        camera.zoom.y = -0.005 * (screen_width() / screen_height());
+        //camera.zoom.y = -0.005 * (screen_width() / screen_height());
         set_camera(&camera);
 
         map.draw();
