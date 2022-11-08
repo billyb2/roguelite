@@ -1,6 +1,12 @@
 use std::collections::HashMap;
 
-use crate::{player::{Player, PLAYER_SIZE}, draw::Drawable, map::Floor, monsters::Monster, math::{AsAABB, AxisAlignedBoundingBox, aabb_collision, get_angle}};
+use crate::{
+    draw::Drawable,
+    map::Floor,
+    math::{aabb_collision, get_angle, AsAABB, AxisAlignedBoundingBox},
+    monsters::Monster,
+    player::{Player, PLAYER_SIZE},
+};
 use macroquad::prelude::*;
 
 use super::Attack;
@@ -12,15 +18,19 @@ pub struct Slash {
     angle: f32,
     texture: Texture2D,
     time: u16,
-
 }
 
 impl Attack for Slash {
-    fn new(player: &mut Player, angle: f32, textures: &HashMap<String, Texture2D>, floor: &Floor, is_primary: bool) -> Box<Self> {
+    fn new(
+        player: &mut Player,
+        angle: f32,
+        textures: &HashMap<String, Texture2D>,
+        floor: &Floor,
+        is_primary: bool,
+    ) -> Box<Self> {
         let cooldown = match is_primary {
             true => player.primary_cooldown,
             false => player.secondary_cooldown,
-
         };
 
         if cooldown == 0 {
@@ -28,9 +38,7 @@ impl Attack for Slash {
 
             if !floor.collision(player, change) {
                 player.pos += change;
-
             }
-
         }
 
         Box::new(Self {
@@ -38,7 +46,6 @@ impl Attack for Slash {
             angle,
             texture: *textures.get("slash.webp").unwrap(),
             time: 0,
-
         })
     }
 
@@ -48,52 +55,48 @@ impl Attack for Slash {
         if !floor.collision(self, movement) {
             self.pos += movement;
             self.time += 1;
-
         } else {
             return true;
-
-        } 
+        }
 
         if self.time >= 10 {
             return true;
-
         }
 
         // Check to see if it's collided with a monster
-        if let Some(monster) = monsters.iter_mut().find(|m| aabb_collision(self, &m.as_aabb(), Vec2::ZERO)) {
+        if let Some(monster) = monsters
+            .iter_mut()
+            .find(|m| aabb_collision(self, &m.as_aabb(), Vec2::ZERO))
+        {
             const DAMAGE: f32 = 10.0;
 
-            let damage_direction = get_angle(monster.pos().x, monster.pos().y, self.pos.x, self.pos.y);
+            let damage_direction =
+                get_angle(monster.pos().x, monster.pos().y, self.pos.x, self.pos.y);
             monster.take_damage(DAMAGE, damage_direction, floor);
 
             return true;
-
         }
 
         false
-
     }
 
     fn cooldown(&self) -> u16 {
         30
     }
-
 }
 
 impl AsAABB for Slash {
     fn as_aabb(&self) -> AxisAlignedBoundingBox {
         AxisAlignedBoundingBox {
-            pos: self.pos, 
+            pos: self.pos,
             size: SIZE,
         }
     }
-
 }
 
 impl Drawable for Slash {
     fn pos(&self) -> Vec2 {
         self.pos
-
     }
 
     fn size(&self) -> Vec2 {
@@ -106,8 +109,5 @@ impl Drawable for Slash {
 
     fn texture(&self) -> Option<Texture2D> {
         Some(self.texture)
-        
     }
-
 }
-

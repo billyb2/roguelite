@@ -1,6 +1,12 @@
 use std::collections::HashMap;
 
-use crate::{player::Player, draw::Drawable, map::Floor, monsters::Monster, math::{AsAABB, AxisAlignedBoundingBox, aabb_collision, get_angle}};
+use crate::{
+    draw::Drawable,
+    map::Floor,
+    math::{aabb_collision, get_angle, AsAABB, AxisAlignedBoundingBox},
+    monsters::Monster,
+    player::Player,
+};
 use macroquad::prelude::*;
 
 use super::Attack;
@@ -13,16 +19,20 @@ pub struct MagicMissile {
     texture: Texture2D,
     time: u16,
     bounces: u8,
-
 }
 
 impl Attack for MagicMissile {
-    fn new(player: &mut Player, angle: f32, textures: &HashMap<String, Texture2D>, floor: &Floor, is_primary: bool) -> Box<Self> {
+    fn new(
+        player: &mut Player,
+        angle: f32,
+        textures: &HashMap<String, Texture2D>,
+        floor: &Floor,
+        is_primary: bool,
+    ) -> Box<Self> {
         // "Knocback" the player a bit
         let cooldown = match is_primary {
             true => player.primary_cooldown,
             false => player.secondary_cooldown,
-
         };
 
         if cooldown == 0 {
@@ -30,9 +40,7 @@ impl Attack for MagicMissile {
 
             if !floor.collision(player, change) {
                 player.pos += change;
-
             }
-
         }
 
         Box::new(Self {
@@ -41,7 +49,6 @@ impl Attack for MagicMissile {
             texture: *textures.get("magic_missile.webp").unwrap(),
             time: 0,
             bounces: 0,
-
         })
     }
 
@@ -58,59 +65,53 @@ impl Attack for MagicMissile {
 
             if self.bounces > 3 {
                 return true;
-
             }
-
-
         } else {
             self.pos += movement;
             self.time += 1;
-
-        } 
+        }
 
         if self.time >= 60 {
             return true;
-
         }
 
         // Check to see if it's collided with a monster
-        if let Some(monster) = monsters.iter_mut().find(|m| aabb_collision(self, &m.as_aabb(), Vec2::ZERO)) {
+        if let Some(monster) = monsters
+            .iter_mut()
+            .find(|m| aabb_collision(self, &m.as_aabb(), Vec2::ZERO))
+        {
             const BASE_DAMAGE: u16 = 4;
             // The damage increases the more the projectile bounces
             let damage = BASE_DAMAGE.pow(1 + self.bounces as u32) as f32;
 
-            let damage_direction = get_angle(monster.pos().x, monster.pos().y, self.pos.x, self.pos.y);
+            let damage_direction =
+                get_angle(monster.pos().x, monster.pos().y, self.pos.x, self.pos.y);
             monster.take_damage(damage, damage_direction, floor);
 
             self.angle = get_angle(self.pos.x, self.pos.y, monster.pos().x, monster.pos().y);
             self.pos += Vec2::new(self.angle.cos(), self.angle.sin()) * 5.0;
-
         }
 
         false
-
     }
 
     fn cooldown(&self) -> u16 {
         45
     }
-
 }
 
 impl AsAABB for MagicMissile {
     fn as_aabb(&self) -> AxisAlignedBoundingBox {
         AxisAlignedBoundingBox {
-            pos: self.pos, 
+            pos: self.pos,
             size: SIZE,
         }
     }
-
 }
 
 impl Drawable for MagicMissile {
     fn pos(&self) -> Vec2 {
         self.pos
-
     }
 
     fn size(&self) -> Vec2 {
@@ -123,8 +124,5 @@ impl Drawable for MagicMissile {
 
     fn texture(&self) -> Option<Texture2D> {
         Some(self.texture)
-        
     }
-
 }
-

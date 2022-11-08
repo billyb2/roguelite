@@ -1,5 +1,5 @@
-use std::f32::consts::{PI, FRAC_PI_2};
 use macroquad::prelude::*;
+use std::f32::consts::{FRAC_PI_2, PI};
 
 use crate::draw::Drawable;
 
@@ -11,7 +11,7 @@ pub fn get_angle(cx: f32, cy: f32, ex: f32, ey: f32) -> f32 {
         // Returns the angle in radians
         true => (dy / dx).atan(),
         false => match dy > 0.0 {
-            true => FRAC_PI_2, 
+            true => FRAC_PI_2,
             false => FRAC_PI_2,
         },
     };
@@ -19,23 +19,19 @@ pub fn get_angle(cx: f32, cy: f32, ex: f32, ey: f32) -> f32 {
     match cx < ex {
         true => angle - PI,
         false => angle,
-
     }
-    
 }
 
 #[derive(Clone)]
 pub struct AxisAlignedBoundingBox {
     pub pos: Vec2,
     pub size: Vec2,
-
 }
 
 impl AsAABB for AxisAlignedBoundingBox {
     fn as_aabb(&self) -> AxisAlignedBoundingBox {
         self.clone()
     }
-
 }
 
 impl Drawable for AxisAlignedBoundingBox {
@@ -48,10 +44,14 @@ impl Drawable for AxisAlignedBoundingBox {
     }
 
     fn draw(&self) {
-        draw_rectangle(self.pos.x, self.pos.y, self.size.x, self.size.y, Color::from_rgba(255, 0, 0, 100));
-        
+        draw_rectangle(
+            self.pos.x,
+            self.pos.y,
+            self.size.x,
+            self.size.y,
+            Color::from_rgba(255, 0, 0, 100),
+        );
     }
-
 }
 
 pub trait AsAABB {
@@ -75,7 +75,5 @@ pub fn aabb_collision<A: AsAABB, B: AsAABB>(aabb1: &A, aabb2: &B, distance: Vec2
     let obj2_min = obj2.pos - half_obj2_size;
     let obj2_max = obj2.pos + half_obj2_size;
 
-    obj1_min.cmple(obj2_max).all() &&
-    obj2_min.cmple(obj1_max).all()
-
+    obj1_min.cmple(obj2_max).all() && obj2_min.cmple(obj1_max).all()
 }
