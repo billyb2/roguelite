@@ -23,6 +23,38 @@ use macroquad::miniquad::conf::Platform;
 use macroquad::prelude::*;
 use macroquad::ui::root_ui;
 
+const DEFAULT_FRAGMENT_SHADER: &'static str = "#version 100
+precision lowp float;
+varying vec2 uv;
+uniform sampler2D Texture;
+uniform lowp vec2 player_pos;
+
+void main() {
+    gl_FragColor = texture2D(Texture, uv);
+	vec2 frag_coord = gl_FragCoord.xy;
+	frag_coord.y = 600.0 - gl_FragCoord.y;
+
+	float lighting = 1.0 - min(length(frag_coord - player_pos), 300.0) / 300.0;
+	gl_FragColor.rgb *= vec3(lighting * 0.8);
+}
+";
+
+const DEFAULT_VERTEX_SHADER: &'static str = "#version 100
+precision lowp float;
+attribute vec3 position;
+attribute vec2 texcoord;
+varying vec2 uv;
+uniform mat4 Model;
+uniform mat4 Projection;
+
+void main() {
+    gl_Position = Projection * Model * vec4(position, 1);
+    uv = texcoord;
+}
+";
+
+const CAMERA_ZOOM: f32 = 0.0045;
+
 #[macroquad::main(window_conf)]
 async fn main() {
 	let time = SystemTime::elapsed(&UNIX_EPOCH).unwrap().as_secs();
@@ -31,7 +63,7 @@ async fn main() {
 	io::stdout().flush().unwrap();
 
 	let mut class = String::new();
-	io::stdin().read_line(&mut class).unwrap();
+	// io::stdin().read_line(&mut class).unwrap();
 
 	class = class.to_lowercase();
 	class.pop();
@@ -68,8 +100,10 @@ async fn main() {
 
 	let mut camera = Camera2D {
 		target: players[0].pos(),
-		zoom: Vec2::new(0.001, -0.001 * (screen_width() / screen_height())),
-		// zoom: Vec2::new(0.005, -0.005 * (screen_width() / screen_height())),
+		zoom: Vec2::new(
+			CAMERA_ZOOM,
+			-CAMERA_ZOOM * (screen_width() / screen_height()),
+		),
 		..Default::default()
 	};
 
@@ -77,6 +111,26 @@ async fn main() {
 
 	let mut frames_till_update_framerate: u8 = 30;
 	let mut fps = 0.0;
+
+	let fragment_shader = DEFAULT_FRAGMENT_SHADER.to_string();
+	let vertex_shader = DEFAULT_VERTEX_SHADER.to_string();
+
+	let pipeline_params = PipelineParams {
+		depth_write: true,
+		depth_test: Comparison::LessOrEqual,
+		..Default::default()
+	};
+
+	let material = load_material(
+		&vertex_shader,
+		&fragment_shader,
+		MaterialParams {
+			pipeline_params,
+			uniforms: vec![("player_pos".to_string(), UniformType::Float2)],
+			..Default::default()
+		},
+	)
+	.unwrap();
 
 	loop {
 		let frame_time = get_frame_time();
@@ -107,15 +161,23 @@ async fn main() {
 		clear_background(WHITE);
 
 		camera.target = players[0].pos();
-		//camera.zoom.y = -0.005 * (screen_width() / screen_height());
+		camera.zoom.y = -0.005 * (screen_width() / screen_height());
 		set_camera(&camera);
+
+		material.set_uniform("player_pos", camera.world_to_screen(players[0].pos));
+
+		gl_use_material(material);
 
 		map.draw();
 		monsters.iter().for_each(|m| m.draw());
+
 		players
 			.iter()
 			.flat_map(|p| p.attacks.iter())
 			.for_each(|a| a.draw());
+
+		gl_use_default_material();
+
 		players.iter().for_each(|p| p.draw());
 
 		root_ui().label(Vec2::ZERO, &fps.to_string());
