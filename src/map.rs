@@ -10,8 +10,11 @@ use crate::monsters::{Monster, SmallRat};
 use crate::player::Player;
 
 pub const TILE_SIZE: usize = 25;
+
 pub const MAP_WIDTH_TILES: usize = 80;
 pub const MAP_HEIGHT_TILES: usize = 80;
+
+pub const MAP_SIZE_TILES: IVec2 = IVec2::new(MAP_WIDTH_TILES as i32, MAP_HEIGHT_TILES as i32);
 
 pub struct Object {
 	pos: IVec2,
@@ -193,22 +196,49 @@ impl Floor {
 					false => (other_room_center, room_center),
 				};
 
-				let center_touching_wall = |room: &Room, center: IVec2| {
-					center.cmpeq(room.top_left).any() || center.cmpeq(room.bottom_right).any()
+				let center_touching_wall = |room: &Room, center_ivec4: IVec4| -> bool {
+					let room_extremes = IVec4::new(
+						room.top_left.x,
+						room.top_left.y,
+						room.bottom_right.x,
+						room.bottom_right.y,
+					);
+					center_ivec4.cmpeq(room_extremes).any()
 				};
+
+				let left_room_ivec4 =
+					IVec4::new(left_room.x, left_room.y, left_room.x, left_room.y);
+
+				let right_room_ivec4 =
+					IVec4::new(right_room.x, right_room.y, right_room.x, right_room.y);
 
 				if rooms
 					.iter()
-					.any(|room| center_touching_wall(room, left_room))
+					.any(|room| center_touching_wall(room, left_room_ivec4))
 				{
 					let new_left_room = (-2..=2).into_iter().find_map(|change| {
 						let left_room_x_change = left_room + IVec2::new(change, 0);
 						let left_room_y_change = left_room + IVec2::new(0, change);
 
+						let left_room_x_change_ivec4 = IVec4::new(
+							left_room_x_change.x,
+							left_room_x_change.y,
+							left_room_x_change.x,
+							left_room_x_change.y,
+						);
+
+						let left_room_y_change_ivec4 = IVec4::new(
+							left_room_y_change.x,
+							left_room_y_change.y,
+							left_room_y_change.x,
+							left_room_y_change.y,
+						);
+
 						rooms.iter().find_map(|room_extremes| {
-							if !center_touching_wall(room_extremes, left_room_x_change) {
+							if !center_touching_wall(room_extremes, left_room_x_change_ivec4) {
 								Some(left_room_x_change)
-							} else if !center_touching_wall(room_extremes, left_room_y_change) {
+							} else if !center_touching_wall(room_extremes, left_room_y_change_ivec4)
+							{
 								Some(left_room_y_change)
 							} else {
 								None
@@ -225,16 +255,33 @@ impl Floor {
 
 				if rooms
 					.iter()
-					.any(|room_extremes| center_touching_wall(room_extremes, right_room))
+					.any(|room_extremes| center_touching_wall(room_extremes, right_room_ivec4))
 				{
 					let new_right_room = (-2..=2).into_iter().find_map(|change| {
 						let right_room_x_change = right_room + IVec2::new(change, 0);
 						let right_room_y_change = right_room + IVec2::new(0, change);
 
+						let right_room_x_change_ivec4 = IVec4::new(
+							right_room_x_change.x,
+							right_room_x_change.y,
+							right_room_x_change.x,
+							right_room_x_change.y,
+						);
+
+						let right_room_y_change_ivec4 = IVec4::new(
+							right_room_y_change.x,
+							right_room_y_change.y,
+							right_room_y_change.x,
+							right_room_y_change.y,
+						);
+
 						rooms.iter().find_map(|room_extremes| {
-							if !center_touching_wall(room_extremes, right_room_x_change) {
+							if !center_touching_wall(room_extremes, right_room_x_change_ivec4) {
 								Some(right_room_x_change)
-							} else if !center_touching_wall(room_extremes, right_room_y_change) {
+							} else if !center_touching_wall(
+								room_extremes,
+								right_room_y_change_ivec4,
+							) {
 								Some(right_room_y_change)
 							} else {
 								None
@@ -515,33 +562,23 @@ impl Drawable for Map {
 }
 
 fn find_viable_neighbors(collidable_objects: &[Object], pos: IVec2) -> Vec<(IVec2, i32)> {
-	let mut potential_neighbors = {
-		let mut positions = [Some(pos); 4];
-		let changes = [
-			IVec2::new(-1, 0),
-			IVec2::new(1, 0),
-			IVec2::new(0, -1),
-			IVec2::new(0, 1),
-		];
+	let change = IVec4::new(-1, -1, 1, 1);
+	let new_pos = IVec4::new(pos.x, pos.y, pos.x, pos.y) + change;
 
-		positions
-			.iter_mut()
-			.zip(changes.into_iter())
-			.for_each(|(p, change)| {
-				let new_pos = p.unwrap() + change;
+	let mut potential_neighbors = [
+		Some(IVec2::new(new_pos.x, pos.y)),
+		Some(IVec2::new(new_pos.z, pos.y)),
+		Some(IVec2::new(pos.x, new_pos.y)),
+		Some(IVec2::new(pos.x, new_pos.w)),
+	];
 
-				if new_pos.x < 0
-					|| new_pos.x >= MAP_WIDTH_TILES.try_into().unwrap()
-					|| new_pos.y < 0 || new_pos.y >= MAP_HEIGHT_TILES.try_into().unwrap()
-				{
-					*p = None;
-				} else {
-					*p = Some(new_pos);
-				}
-			});
+	potential_neighbors.iter_mut().for_each(|new_pos| {
+		let p = unsafe { new_pos.unwrap_unchecked() };
 
-		positions
-	};
+		if p.cmplt(IVec2::ZERO).any() || p.cmpgt(MAP_SIZE_TILES).any() {
+			*new_pos = None;
+		}
+	});
 
 	collidable_objects.iter().for_each(|c| {
 		potential_neighbors.iter_mut().for_each(|p| {
