@@ -23,6 +23,9 @@ use macroquad::miniquad::conf::Platform;
 use macroquad::prelude::*;
 use macroquad::ui::root_ui;
 
+pub const MAX_VIEW_OF_PLAYER: f32 = 200.0;
+static mut PLAYER_POS: Vec2 = Vec2::ZERO;
+
 const DEFAULT_FRAGMENT_SHADER: &'static str = "#version 100
 precision lowp float;
 varying vec2 uv;
@@ -158,10 +161,12 @@ async fn main() {
 		}
 
 		// Rendering
-		clear_background(WHITE);
+		clear_background(BLACK);
+
+		unsafe { PLAYER_POS = players[0].pos };
 
 		camera.target = players[0].pos();
-		camera.zoom.y = -0.005 * (screen_width() / screen_height());
+		camera.zoom.y = -CAMERA_ZOOM * (screen_width() / screen_height());
 		set_camera(&camera);
 
 		material.set_uniform("player_pos", camera.world_to_screen(players[0].pos));
