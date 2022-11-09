@@ -578,7 +578,7 @@ pub fn find_path(
 	path.map(|(positions, _)| {
 		positions
 			.iter()
-			.map(|pos| (*pos * IVec2::splat(TILE_SIZE as i32)).as_vec2() - (aabb.size * 0.25))
+			.map(|pos| (*pos * IVec2::splat(TILE_SIZE as i32)).as_vec2() + (aabb.size * 0.5))
 			.collect()
 	})
 }

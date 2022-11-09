@@ -66,7 +66,7 @@ async fn main() {
 	io::stdout().flush().unwrap();
 
 	let mut class = String::new();
-	// io::stdin().read_line(&mut class).unwrap();
+	io::stdin().read_line(&mut class).unwrap();
 
 	class = class.to_lowercase();
 	class.pop();

@@ -29,13 +29,19 @@ pub struct AxisAlignedBoundingBox {
 }
 
 impl AsAABB for AxisAlignedBoundingBox {
-	fn as_aabb(&self) -> AxisAlignedBoundingBox { self.clone() }
+	fn as_aabb(&self) -> AxisAlignedBoundingBox {
+		self.clone()
+	}
 }
 
 impl Drawable for AxisAlignedBoundingBox {
-	fn pos(&self) -> Vec2 { self.pos }
+	fn pos(&self) -> Vec2 {
+		self.pos
+	}
 
-	fn size(&self) -> Vec2 { self.size }
+	fn size(&self) -> Vec2 {
+		self.size
+	}
 
 	fn draw(&self) {
 		draw_rectangle(
@@ -50,6 +56,11 @@ impl Drawable for AxisAlignedBoundingBox {
 
 pub trait AsAABB {
 	fn as_aabb(&self) -> AxisAlignedBoundingBox;
+
+	fn center(&self) -> Vec2 {
+		let aabb = self.as_aabb();
+		aabb.pos + (aabb.size / 2.0)
+	}
 }
 
 pub fn aabb_collision<A: AsAABB, B: AsAABB>(aabb1: &A, aabb2: &B, distance: Vec2) -> bool {

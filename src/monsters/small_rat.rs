@@ -32,7 +32,7 @@ impl Target {
 	}
 }
 
-const SIZE: f32 = 22.5;
+const SIZE: f32 = 18.0;
 const MAX_HEALTH: f32 = 35.0;
 
 pub struct SmallRat {
@@ -112,8 +112,9 @@ impl Monster for SmallRat {
 		}
 
 		// "Flinch" away from damage
-		let change = Vec2::new(damage_direction.cos(), damage_direction.sin()) *
-			self.size() * (damage / (MAX_HEALTH / 2.0));
+		let change = Vec2::new(damage_direction.cos(), damage_direction.sin())
+			* self.size()
+			* (damage / (MAX_HEALTH / 2.0));
 
 		if !floor.collision(self, change) {
 			self.pos += change;
@@ -159,7 +160,9 @@ impl Monster for SmallRat {
 		});
 	}
 
-	fn living(&self) -> bool { self.health > 0.0 }
+	fn living(&self) -> bool {
+		self.health > 0.0
+	}
 }
 
 const AGGRO_DISTANCE: f32 = (TILE_SIZE * 6) as f32;
@@ -192,25 +195,36 @@ fn passive_mode(my_monster: &mut SmallRat, players: &[Player], floor: &Floor) {
 
 	if my_monster.time_til_move == 0 {
 		if my_monster.current_path.is_none() {
-			if let Some(path) = floor.find_path(
-				my_monster,
-				my_monster.current_target.as_ref().unwrap().unwrap_pos(),
-			) {
+			let goal_aabb = AxisAlignedBoundingBox {
+				pos: my_monster.current_target.as_ref().unwrap().unwrap_pos(),
+				size: Vec2::splat(TILE_SIZE as f32),
+			};
+
+			if let Some(path) = floor.find_path(my_monster, &goal_aabb) {
 				my_monster.current_path = Some((path, 1));
 			} else {
 				my_monster.current_target = Some(Target::Pos(find_target()));
 			}
 		}
 
+		let my_monster_center = my_monster.center();
+
 		if let Some((path, i)) = &mut my_monster.current_path {
 			if let Some(pos) = path.get(*i) {
-				if my_monster.pos.distance(*pos) < 2.0 {
+				if my_monster_center.distance(*pos) <= TILE_SIZE as f32 {
 					*i += 1;
 				} else {
-					const PASSIVE_SPEED: f32 = 0.7;
+					const PASSIVE_SPEED: f32 = 0.75;
 
 					let angle = get_angle(pos.x, pos.y, my_monster.pos.x, my_monster.pos.y);
-					my_monster.pos += Vec2::new(angle.cos(), angle.sin()) * PASSIVE_SPEED;
+					let change = Vec2::new(angle.cos(), angle.sin()) * PASSIVE_SPEED;
+
+					if floor.collision(my_monster, change) {
+						my_monster.current_path = None;
+						my_monster.current_target = None;
+					} else {
+						my_monster.pos += change;
+					}
 				}
 			} else {
 				my_monster.current_path = None;
@@ -254,7 +268,7 @@ fn attack_mode(my_monster: &mut SmallRat, players: &[Player], floor: &Floor) {
 		// If it isn't, try to see if there's anohter player within aggro range
 		if !target_in_aggro_range {
 			if let Some((i, p, distance)) = players.iter().enumerate().find_map(|(_, p)| {
-				let distance_from_target = p.pos().distance(my_monster.pos);
+				let distance_from_target = p.center().distance(my_monster.center());
 
 				match distance_from_target <= AGGRO_DISTANCE {
 					true => Some((i, p, distance_from_target)),
@@ -274,21 +288,51 @@ fn attack_mode(my_monster: &mut SmallRat, players: &[Player], floor: &Floor) {
 
 		// We now have a player to target, so find the quickest path to get to them
 		if my_monster.current_path.is_none() {
-			if let Some(path) = floor.find_path(my_monster, target_player.pos()) {
+			if let Some(path) = floor.find_path(my_monster, target_player) {
 				my_monster.current_path = Some((path, 1));
 			}
 		}
 
+		let my_monster_center = my_monster.center();
+
 		if let Some((path, i)) = &mut my_monster.current_path {
 			if let Some(pos) = path.get(*i) {
-				if my_monster.pos.distance(*pos) < 2.0 {
+				let distance_to_next_tile = my_monster_center.distance(*pos);
+				if distance_to_next_tile <= SIZE / 2.0 {
+					/*
+					let angle = get_angle(pos.x, pos.y, my_monster_center.x, my_monster_center.y);
+					let change = Vec2::new(angle.cos(), angle.sin()) * distance_to_next_tile;
+
+					my_monster.pos += change;
+					*/
+
 					*i += 1;
 				} else {
-					let angle = get_angle(pos.x, pos.y, my_monster.pos.x, my_monster.pos.y);
-					my_monster.pos += Vec2::new(angle.cos(), angle.sin());
+					let angle = get_angle(pos.x, pos.y, my_monster_center.x, my_monster_center.y);
+					let change = Vec2::new(angle.cos(), angle.sin()) * 1.1;
+
+					if let Some(obj) = floor.collision_obj(my_monster, change) {
+						let angle = get_angle(
+							obj.center().x,
+							obj.center().y,
+							my_monster_center.x,
+							my_monster_center.y,
+						);
+
+						let change = Vec2::new(angle.cos(), angle.sin());
+						my_monster.pos -= change;
+
+						my_monster.current_path = None;
+						// my_monster.current_target = None;
+						my_monster.time_til_move = 0;
+					} else {
+						my_monster.pos += change;
+					}
 				}
-			} else if let Some(path) = floor.find_path(my_monster, target_player.pos()) {
+			} else if let Some(path) = floor.find_path(my_monster, target_player) {
 				my_monster.current_path = Some((path, 1));
+			} else {
+				my_monster.current_path = None;
 			}
 		}
 
@@ -340,8 +384,8 @@ fn move_blindly(my_monster: &mut SmallRat, floor: &Floor) {
 		let direction = Vec2::new(rand::gen_range(-1.0, 1.0), rand::gen_range(-1.0, 1.0));
 
 		my_monster.current_target = Some(Target::Pos(
-			direction * Vec2::splat((TILE_SIZE * 2) as f32) +
-				my_monster.pos + Vec2::splat(SIZE * 0.25),
+			direction * Vec2::splat((TILE_SIZE * 2) as f32)
+				+ my_monster.pos + Vec2::splat(SIZE * 0.25),
 		));
 	}
 }
@@ -356,7 +400,9 @@ impl AsAABB for SmallRat {
 }
 
 impl Drawable for SmallRat {
-	fn pos(&self) -> Vec2 { self.pos }
+	fn pos(&self) -> Vec2 {
+		self.pos
+	}
 
 	fn size(&self) -> Vec2 {
 		match self.attack_mode {
@@ -365,7 +411,11 @@ impl Drawable for SmallRat {
 		}
 	}
 
-	fn flip_x(&self) -> bool { true }
+	fn flip_x(&self) -> bool {
+		true
+	}
 
-	fn texture(&self) -> Option<Texture2D> { Some(self.texture) }
+	fn texture(&self) -> Option<Texture2D> {
+		Some(self.texture)
+	}
 }

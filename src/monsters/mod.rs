@@ -30,7 +30,9 @@ pub trait Monster: AsAABB + Drawable + Send {
 	fn damage_players(&mut self, players: &mut [Player], floor: &Floor);
 	fn take_damage(&mut self, damage: f32, damage_direction: f32, floor: &Floor);
 	fn living(&self) -> bool;
-	fn as_aabb_obj(&self) -> AxisAlignedBoundingBox { self.as_aabb() }
+	fn as_aabb_obj(&self) -> AxisAlignedBoundingBox {
+		self.as_aabb()
+	}
 	fn apply_enchantment(&mut self, enchantment: Enchantment);
 	fn update_enchantments(&mut self);
 }
@@ -40,12 +42,10 @@ pub fn update_monsters(
 ) {
 	// Each thread does 4 monsters at a time, since inidividual monsters aren't too
 	// expensive
-	monsters.par_chunks_mut(4).for_each(|monsters| {
+	monsters.par_iter_mut().for_each(|m| {
 		// Only move monsters that are within a certain distance of any player
-		monsters.iter_mut().for_each(|m| {
-			m.update_enchantments();
-			m.movement(players, floor)
-		});
+		m.update_enchantments();
+		m.movement(players, floor)
 	});
 
 	monsters.retain_mut(|m| {

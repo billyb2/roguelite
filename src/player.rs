@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::attacks::*;
 use crate::draw::Drawable;
-use crate::map::Floor;
+use crate::map::{distance_squared, pos_to_tile, Floor, TILE_SIZE};
 use crate::math::{AsAABB, AxisAlignedBoundingBox};
 use crate::monsters::Monster;
 use macroquad::prelude::*;
@@ -43,13 +43,19 @@ impl Player {
 	}
 
 	#[inline]
-	pub fn pos(&self) -> Vec2 { self.pos }
+	pub fn pos(&self) -> Vec2 {
+		self.pos
+	}
 
 	#[inline]
-	pub fn health(&self) -> f32 { self.health }
+	pub fn health(&self) -> f32 {
+		self.health
+	}
 
 	#[inline]
-	pub fn class(&self) -> PlayerClass { self.class }
+	pub fn class(&self) -> PlayerClass {
+		self.class
+	}
 }
 
 impl AsAABB for Player {
@@ -62,9 +68,13 @@ impl AsAABB for Player {
 }
 
 impl Drawable for Player {
-	fn pos(&self) -> Vec2 { self.pos }
+	fn pos(&self) -> Vec2 {
+		self.pos
+	}
 
-	fn size(&self) -> Vec2 { Vec2::splat(PLAYER_SIZE) }
+	fn size(&self) -> Vec2 {
+		Vec2::splat(PLAYER_SIZE)
+	}
 
 	fn draw(&self) {
 		draw_rectangle(self.pos.x, self.pos.y, PLAYER_SIZE, PLAYER_SIZE, RED);
