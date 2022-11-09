@@ -147,7 +147,7 @@ async fn main() {
 			&mut players[0],
 			&mut monsters,
 			&textures,
-			map.current_floor(),
+			map.current_floor_mut(),
 		);
 		update_cooldowns(&mut players);
 		update_attacks(&mut players, &mut monsters, map.current_floor());

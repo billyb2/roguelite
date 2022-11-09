@@ -4,12 +4,14 @@ use crate::attacks::*;
 use crate::map::Floor;
 use crate::math::get_angle;
 use crate::monsters::Monster;
-use crate::player::{move_player, primary_attack, secondary_attack, Player};
+use crate::player::{
+	interact_with_door, move_player, primary_attack, secondary_attack, DoorInteraction, Player,
+};
 use macroquad::prelude::*;
 
 pub fn keyboard_input(
 	player: &mut Player, monsters: &mut [Box<dyn Monster>], textures: &HashMap<String, Texture2D>,
-	floor: &Floor,
+	floor: &mut Floor,
 ) {
 	if player.health() == 0.0 {
 		return;
@@ -32,6 +34,14 @@ pub fn keyboard_input(
 
 	if is_key_down(KeyCode::D) {
 		x_movement += 1.0;
+	}
+
+	if is_key_pressed(KeyCode::O) {
+		interact_with_door(player, DoorInteraction::Opening, floor);
+	}
+
+	if is_key_pressed(KeyCode::C) {
+		interact_with_door(player, DoorInteraction::Closing, floor);
 	}
 
 	let mouse_pos = mouse_position_local();

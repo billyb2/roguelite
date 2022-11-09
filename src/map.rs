@@ -16,7 +16,16 @@ pub const MAP_HEIGHT_TILES: usize = 80;
 pub struct Object {
 	pos: IVec2,
 	texture: Texture2D,
-	is_door: bool,
+	door: Option<Door>,
+}
+
+impl Object {
+	fn is_collidable(&self) -> bool {
+		match &self.door {
+			Some(door) => !door.is_open,
+			None => true,
+		}
+	}
 }
 
 impl AsAABB for Object {
@@ -28,10 +37,34 @@ impl AsAABB for Object {
 	}
 }
 
+#[derive(Clone)]
+pub struct Door {
+	pos: IVec2,
+	pub is_open: bool,
+}
+
+impl Door {
+	pub fn pos(&self) -> IVec2 {
+		self.pos
+	}
+
+	pub fn is_open(&self) -> bool {
+		self.is_open
+	}
+
+	pub fn open(&mut self) {
+		self.is_open = true;
+	}
+
+	pub fn close(&mut self) {
+		self.is_open = false;
+	}
+}
+
 struct Room {
 	top_left: IVec2,
 	bottom_right: IVec2,
-	doors: Vec<IVec2>,
+	doors: Vec<Door>,
 }
 
 impl Room {
@@ -67,26 +100,31 @@ impl Room {
 
 pub struct Floor {
 	spawn: Vec2,
-	collidable_objects: Vec<Object>,
+	rooms: Vec<Room>,
+	pub collidable_objects: Vec<Object>,
 	background_objects: Vec<Object>,
 	exit: Object,
 }
 
 impl Floor {
-	pub fn background_objects(&self) -> &[Object] { &self.background_objects }
+	pub fn background_objects(&self) -> &[Object] {
+		&self.background_objects
+	}
 
 	// Same as collision, but returns the actual Object collided w.
 	pub fn collision_obj<A: AsAABB>(&self, aabb: &A, distance: Vec2) -> Option<&Object> {
 		self.collidable_objects
 			.iter()
-			.find(|object| aabb_collision(aabb, *object, distance))
+			.find(|object| object.is_collidable() && aabb_collision(aabb, *object, distance))
 	}
 
 	pub fn collision<A: AsAABB>(&self, aabb: &A, distance: Vec2) -> bool {
 		self.collision_obj(aabb, distance).is_some()
 	}
 
-	pub fn current_spawn(&self) -> Vec2 { self.spawn }
+	pub fn current_spawn(&self) -> Vec2 {
+		self.spawn
+	}
 
 	pub fn new(_floor_num: usize, textures: &HashMap<String, Texture2D>) -> Self {
 		let mut rooms = Vec::new();
@@ -100,8 +138,8 @@ impl Floor {
 				rand::gen_range(0, MAP_WIDTH_TILES as i32),
 				rand::gen_range(0, MAP_HEIGHT_TILES as i32),
 			);
-			let bottom_right = top_left +
-				IVec2::new(
+			let bottom_right = top_left
+				+ IVec2::new(
 					rand::gen_range(MIN_SIZE, MAX_SIZE),
 					rand::gen_range(MIN_SIZE, MAX_SIZE),
 				);
@@ -232,12 +270,15 @@ impl Floor {
 				.filter(|w| hallways.iter().any(|h| h == *w))
 				.for_each(|&door_pos| {
 					// Fix a bug where doors can pop up in the corners of rooms
-					if door_pos != room.top_left &&
-						door_pos != room.bottom_right &&
-						door_pos != IVec2::new(room.bottom_right.x, room.top_left.y) &&
-						door_pos != IVec2::new(room.top_left.x, room.bottom_right.y)
+					if door_pos != room.top_left
+						&& door_pos != room.bottom_right
+						&& door_pos != IVec2::new(room.bottom_right.x, room.top_left.y)
+						&& door_pos != IVec2::new(room.top_left.x, room.bottom_right.y)
 					{
-						room.doors.push(door_pos);
+						room.doors.push(Door {
+							pos: door_pos,
+							is_open: false,
+						});
 					}
 				});
 		});
@@ -255,12 +296,12 @@ impl Floor {
 					Object {
 						pos: IVec2::new(x, 0),
 						texture: *textures.get("black.webp").unwrap(),
-						is_door: false,
+						door: None,
 					},
 					Object {
 						pos: IVec2::new(x, MAP_HEIGHT_TILES as i32),
 						texture: *textures.get("black.webp").unwrap(),
-						is_door: false,
+						door: None,
 					},
 				]
 				.into_iter()
@@ -270,12 +311,12 @@ impl Floor {
 					Object {
 						pos: IVec2::new(0, y),
 						texture: *textures.get("black.webp").unwrap(),
-						is_door: false,
+						door: None,
 					},
 					Object {
 						pos: IVec2::new(MAP_WIDTH_TILES as i32, y),
 						texture: *textures.get("black.webp").unwrap(),
-						is_door: false,
+						door: None,
 					},
 				]
 				.into_iter()
@@ -286,9 +327,13 @@ impl Floor {
 			.iter()
 			.flat_map(|room: &Room| room.generate_walls())
 			.map(|w_pos| {
-				let is_door = rooms.iter().any(|r| r.doors.contains(&w_pos));
+				let door = rooms
+					.iter()
+					.find_map(|r| r.doors.iter().find(|d| d.pos == w_pos))
+					.map(|d| d.clone());
+
 				let texture = *textures
-					.get(match is_door {
+					.get(match door.is_some() {
 						true => "door.webp",
 						false => "black.webp",
 					})
@@ -297,7 +342,7 @@ impl Floor {
 				Object {
 					pos: w_pos,
 					texture,
-					is_door,
+					door,
 				}
 			});
 
@@ -326,7 +371,7 @@ impl Floor {
 						false => "light_gray.webp",
 					})
 					.unwrap(),
-				is_door: false,
+				door: None,
 			}
 		};
 
@@ -340,7 +385,7 @@ impl Floor {
 			.map(|&pos| Object {
 				pos,
 				texture: *textures.get("light_gray.webp").unwrap(),
-				is_door: false,
+				door: None,
 			})
 			.chain(floor.iter().map(pos_to_obj))
 			.collect();
@@ -356,15 +401,22 @@ impl Floor {
 			spawn,
 			collidable_objects,
 			background_objects,
+			rooms,
 			exit: Object {
 				pos: IVec2::ZERO,
 				texture: *textures.get("green.webp").unwrap(),
-				is_door: false,
+				door: None,
 			},
 		}
 	}
 
-	pub fn find_path(&self, pos: &dyn AsAABB, goal: Vec2) -> Option<Vec<Vec2>> {
+	pub fn doors(&mut self) -> impl Iterator<Item = &mut Door> {
+		self.collidable_objects
+			.iter_mut()
+			.filter_map(|obj| obj.door.as_mut())
+	}
+
+	pub fn find_path(&self, pos: &dyn AsAABB, goal: &dyn AsAABB) -> Option<Vec<Vec2>> {
 		find_path(pos, goal, &self.collidable_objects)
 	}
 
@@ -400,7 +452,13 @@ impl Map {
 		map
 	}
 
-	pub fn current_floor(&self) -> &Floor { &self.rooms[self.current_floor_index] }
+	pub fn current_floor(&self) -> &Floor {
+		&self.rooms[self.current_floor_index]
+	}
+
+	pub fn current_floor_mut(&mut self) -> &mut Floor {
+		&mut self.rooms[self.current_floor_index]
+	}
 
 	pub fn descend(
 		&mut self, players: &mut [Player], monsters: &mut Vec<Box<dyn Monster>>,
@@ -420,23 +478,37 @@ impl Map {
 }
 
 impl Drawable for Object {
-	fn pos(&self) -> Vec2 { self.pos.as_vec2() * Vec2::splat(TILE_SIZE as f32) }
+	fn pos(&self) -> Vec2 {
+		self.pos.as_vec2() * Vec2::splat(TILE_SIZE as f32)
+	}
 
-	fn size(&self) -> Vec2 { Vec2::splat(TILE_SIZE as f32) }
+	fn size(&self) -> Vec2 {
+		Vec2::splat(TILE_SIZE as f32)
+	}
 
-	fn texture(&self) -> Option<Texture2D> { Some(self.texture) }
+	fn texture(&self) -> Option<Texture2D> {
+		Some(self.texture)
+	}
 }
 
 impl Drawable for Map {
-	fn pos(&self) -> Vec2 { Vec2::ZERO }
+	fn pos(&self) -> Vec2 {
+		Vec2::ZERO
+	}
 
-	fn size(&self) -> Vec2 { Vec2::ZERO }
+	fn size(&self) -> Vec2 {
+		Vec2::ZERO
+	}
 
 	fn draw(&self) {
 		let room = &self.rooms[self.current_floor_index];
 		room.background_objects
 			.iter()
 			.chain(room.collidable_objects.iter())
+			.filter(|o| match &o.door {
+				Some(door) => !door.is_open,
+				None => true,
+			})
 			.for_each(|o| o.draw());
 		room.exit.draw();
 	}
@@ -458,9 +530,9 @@ fn find_viable_neighbors(collidable_objects: &[Object], pos: IVec2) -> Vec<(IVec
 			.for_each(|(p, change)| {
 				let new_pos = p.unwrap() + change;
 
-				if new_pos.x < 0 ||
-					new_pos.x >= MAP_WIDTH_TILES.try_into().unwrap() ||
-					new_pos.y < 0 || new_pos.y >= MAP_HEIGHT_TILES.try_into().unwrap()
+				if new_pos.x < 0
+					|| new_pos.x >= MAP_WIDTH_TILES.try_into().unwrap()
+					|| new_pos.y < 0 || new_pos.y >= MAP_HEIGHT_TILES.try_into().unwrap()
 				{
 					*p = None;
 				} else {
@@ -475,7 +547,7 @@ fn find_viable_neighbors(collidable_objects: &[Object], pos: IVec2) -> Vec<(IVec
 		potential_neighbors.iter_mut().for_each(|p| {
 			if let Some(p_clone) = *p {
 				// If any potential_neighbors are a collidable object, remove them from the pool
-				if p_clone == c.pos {
+				if c.is_collidable() && p_clone == c.pos {
 					*p = None;
 				}
 			}
@@ -489,12 +561,12 @@ fn find_viable_neighbors(collidable_objects: &[Object], pos: IVec2) -> Vec<(IVec
 }
 
 pub fn find_path(
-	start: &dyn AsAABB, goal: Vec2, collidable_objects: &[Object],
+	start: &dyn AsAABB, goal: &dyn AsAABB, collidable_objects: &[Object],
 ) -> Option<Vec<Vec2>> {
 	let aabb = start.as_aabb();
 
-	let start_tile_pos = (aabb.pos / Vec2::splat(TILE_SIZE as f32)).as_ivec2();
-	let goal_tile_pos = (goal / Vec2::splat(TILE_SIZE as f32)).as_ivec2();
+	let start_tile_pos = pos_to_tile(start);
+	let goal_tile_pos = pos_to_tile(goal);
 
 	let path = astar(
 		&start_tile_pos,
@@ -521,15 +593,18 @@ fn spawn_monsters(
 	}));
 }
 
-fn distance(pos1: IVec2, pos2: IVec2) -> f32 {
-	let distance_squared = distance_squared(pos1, pos2);
-
-	(distance_squared as f32).sqrt()
-}
-
-fn distance_squared(pos1: IVec2, pos2: IVec2) -> i32 {
+pub fn distance_squared(pos1: IVec2, pos2: IVec2) -> i32 {
 	let mut diff = pos2 - pos1;
 	diff = diff * diff;
 
 	diff.x + diff.y
+}
+
+/// Convert from a game world position to a tile position
+pub fn pos_to_tile(obj: &dyn AsAABB) -> IVec2 {
+	let aabb = obj.as_aabb();
+	let center = aabb.pos + aabb.size / 2.0;
+
+	let tile_pos = (center / Vec2::splat(TILE_SIZE as f32)).round().as_ivec2();
+	tile_pos
 }

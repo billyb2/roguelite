@@ -138,3 +138,65 @@ pub fn secondary_attack(
 		PlayerClass::Wizard => BlindingLight::new(player, player.angle, textures, floor, false),
 	}
 }
+
+pub enum DoorInteraction {
+	Opening,
+	Closing,
+}
+
+pub fn interact_with_door(
+	player: &mut Player, door_interaction: DoorInteraction, floor: &mut Floor,
+) {
+	// First, see if the player is in contact with a door
+	let player_tile_pos = pos_to_tile(player);
+
+	// Find all door that's within one tile distance of the player, then pick the closest one
+
+	let door = floor
+		.doors()
+		.filter(|door| {
+			let tile_distance = (door.pos() - player_tile_pos).abs();
+
+			// You can't open or close doors that you're inside of
+			tile_distance.cmple(IVec2::ONE).all() && !door.pos().eq(&player_tile_pos)
+		})
+		.reduce(|door, door2| {
+			// First, depending on the action the player is taking, we can pretty easily decide of the player wants to open or close the door
+			let door_will_be_affected = match door_interaction {
+				DoorInteraction::Opening => !door.is_open,
+				DoorInteraction::Closing => door.is_open,
+			};
+
+			let door2_will_be_affected = match door_interaction {
+				DoorInteraction::Opening => !door2.is_open,
+				DoorInteraction::Closing => door2.is_open,
+			};
+
+			if door_will_be_affected && door2_will_be_affected {
+				let door_distance = (door.pos() * IVec2::splat(TILE_SIZE as i32))
+					.as_vec2()
+					.distance_squared(player.pos);
+				let door2_distance = (door.pos() * IVec2::splat(TILE_SIZE as i32))
+					.as_vec2()
+					.distance_squared(player.pos);
+
+				match door_distance < door2_distance {
+					true => door,
+					false => door2,
+				}
+			} else {
+				if door_will_be_affected {
+					door
+				} else {
+					door2
+				}
+			}
+		});
+
+	if let Some(door) = door {
+		match door_interaction {
+			DoorInteraction::Opening => door.open(),
+			DoorInteraction::Closing => door.close(),
+		};
+	}
+}
