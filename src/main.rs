@@ -16,6 +16,7 @@ use attacks::*;
 use draw::*;
 use input::*;
 use map::*;
+use math::AxisAlignedBoundingBox;
 use monsters::*;
 use player::*;
 
@@ -24,7 +25,10 @@ use macroquad::prelude::*;
 use macroquad::ui::root_ui;
 
 pub const MAX_VIEW_OF_PLAYER: f32 = 200.0;
-static mut PLAYER_POS: Vec2 = Vec2::ZERO;
+static mut PLAYER_AABB: AxisAlignedBoundingBox = AxisAlignedBoundingBox {
+	pos: Vec2::ZERO,
+	size: Vec2::splat(PLAYER_SIZE),
+};
 
 const DEFAULT_FRAGMENT_SHADER: &'static str = "#version 100
 precision lowp float;
@@ -37,7 +41,7 @@ void main() {
 	vec2 frag_coord = gl_FragCoord.xy;
 	frag_coord.y = 600.0 - gl_FragCoord.y;
 
-	float lighting = 1.0 - min(length(frag_coord - player_pos), 300.0) / 300.0;
+	float lighting = 1.0 - min(length(frag_coord - player_pos), 400.0) / 400.0;
 	gl_FragColor.rgb *= vec3(lighting * 0.8);
 }
 ";
@@ -163,7 +167,7 @@ async fn main() {
 		// Rendering
 		clear_background(BLACK);
 
-		unsafe { PLAYER_POS = players[0].pos };
+		unsafe { PLAYER_AABB.pos = players[0].pos };
 
 		camera.target = players[0].pos();
 		camera.zoom.y = -CAMERA_ZOOM * (screen_width() / screen_height());
@@ -174,7 +178,20 @@ async fn main() {
 		gl_use_material(material);
 
 		map.draw();
-		monsters.iter().for_each(|m| m.draw());
+
+		let visible_objects = map.current_floor().visible_objects(&players[0], None);
+
+		monsters
+			.iter()
+			.filter(|m| {
+				let monster_tile_pos = pos_to_tile(&m.as_aabb());
+				let should_be_drawn = visible_objects
+					.iter()
+					.any(|obj| obj.tile_pos() == monster_tile_pos);
+
+				should_be_drawn
+			})
+			.for_each(|m| m.draw());
 
 		players
 			.iter()

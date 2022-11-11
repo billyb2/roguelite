@@ -82,3 +82,66 @@ pub fn aabb_collision<A: AsAABB, B: AsAABB>(aabb1: &A, aabb2: &B, distance: Vec2
 
 	obj1_min.cmple(obj2_max).all() && obj2_min.cmple(obj1_max).all()
 }
+
+/// Bresenhams Circle Algorithm
+pub fn points_on_circumference(center: IVec2, radius: i32) -> Vec<IVec2> {
+	// Distance from center
+	let mut d = IVec2::new(radius, 0);
+	let mut o2 = 1 - radius;
+
+	// TODO: Use an ArrayVec
+	let mut points = Vec::new();
+
+	while d.y <= d.x {
+		points.push(center + d);
+		points.push(center + d.yx());
+		points.push(center + (d * IVec2::new(-1, 1)));
+		points.push(center + (d.yx() * IVec2::new(-1, 1)));
+		points.push(center + (d * IVec2::new(-1, -1)));
+		points.push(center + (d.yx() * IVec2::new(-1, -1)));
+		points.push(center + (d * IVec2::new(1, -1)));
+		points.push(center + (d.yx() * IVec2::new(1, -1)));
+
+		d.y += 1;
+
+		if o2 <= 0 {
+			o2 += (2 * d.y) + 1;
+		} else {
+			d.x -= 1;
+			o2 += (2 * (d.y - d.x)) + 1;
+		}
+	}
+
+	points
+}
+
+pub fn points_on_line(pos1: IVec2, pos2: IVec2) -> Vec<IVec2> {
+	let mut d = (pos2 - pos1).abs();
+
+	let mut pos = pos1;
+	let mut n = 1 + d.x + d.y;
+
+	let inc = -(pos1 - pos2).signum();
+
+	let mut err = d.x - d.y;
+
+	d *= 2;
+
+	let mut lines = Vec::new();
+
+	while n > 0 {
+		lines.push(pos);
+
+		if err > 0 {
+			pos.x += inc.x;
+			err -= d.y;
+		} else {
+			pos.y += inc.y;
+			err += d.x;
+		}
+
+		n -= 1;
+	}
+
+	lines
+}

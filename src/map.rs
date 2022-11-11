@@ -5,9 +5,13 @@ use macroquad::rand::*;
 use pathfinding::prelude::*;
 
 use crate::draw::Drawable;
+use crate::math::points_on_circumference;
+use crate::math::points_on_line;
 use crate::math::{aabb_collision, AsAABB, AxisAlignedBoundingBox};
 use crate::monsters::{Monster, SmallRat};
 use crate::player::Player;
+use crate::player::PLAYER_SIZE;
+use crate::PLAYER_AABB;
 
 pub const TILE_SIZE: usize = 25;
 
@@ -16,14 +20,24 @@ pub const MAP_HEIGHT_TILES: usize = 80;
 
 pub const MAP_SIZE_TILES: IVec2 = IVec2::new(MAP_WIDTH_TILES as i32, MAP_HEIGHT_TILES as i32);
 
+#[derive(Copy, Clone)]
 pub struct Object {
 	pos: IVec2,
 	texture: Texture2D,
+	is_floor: bool,
 	door: Option<Door>,
 }
 
 impl Object {
+	pub fn tile_pos(&self) -> IVec2 {
+		self.pos
+	}
+
 	fn is_collidable(&self) -> bool {
+		if self.is_floor {
+			return false;
+		}
+
 		match &self.door {
 			Some(door) => !door.is_open,
 			None => true,
@@ -40,7 +54,7 @@ impl AsAABB for Object {
 	}
 }
 
-#[derive(Clone)]
+#[derive(Copy, Clone)]
 pub struct Door {
 	pos: IVec2,
 	pub is_open: bool,
@@ -344,11 +358,13 @@ impl Floor {
 						pos: IVec2::new(x, 0),
 						texture: *textures.get("black.webp").unwrap(),
 						door: None,
+						is_floor: false,
 					},
 					Object {
 						pos: IVec2::new(x, MAP_HEIGHT_TILES as i32),
 						texture: *textures.get("black.webp").unwrap(),
 						door: None,
+						is_floor: false,
 					},
 				]
 				.into_iter()
@@ -359,11 +375,13 @@ impl Floor {
 						pos: IVec2::new(0, y),
 						texture: *textures.get("black.webp").unwrap(),
 						door: None,
+						is_floor: false,
 					},
 					Object {
 						pos: IVec2::new(MAP_WIDTH_TILES as i32, y),
 						texture: *textures.get("black.webp").unwrap(),
 						door: None,
+						is_floor: false,
 					},
 				]
 				.into_iter()
@@ -389,6 +407,7 @@ impl Floor {
 				Object {
 					pos: w_pos,
 					texture,
+					is_floor: false,
 					door,
 				}
 			});
@@ -419,6 +438,7 @@ impl Floor {
 					})
 					.unwrap(),
 				door: None,
+				is_floor: !is_dungeon_wall,
 			}
 		};
 
@@ -433,6 +453,7 @@ impl Floor {
 				pos,
 				texture: *textures.get("light_gray.webp").unwrap(),
 				door: None,
+				is_floor: true,
 			})
 			.chain(floor.iter().map(pos_to_obj))
 			.collect();
@@ -453,6 +474,7 @@ impl Floor {
 				pos: IVec2::ZERO,
 				texture: *textures.get("green.webp").unwrap(),
 				door: None,
+				is_floor: true,
 			},
 		}
 	}
@@ -472,6 +494,40 @@ impl Floor {
 		players
 			.iter()
 			.any(|p| aabb_collision(p, &self.exit, Vec2::ZERO))
+	}
+
+	pub fn visible_objects(&self, aabb: &dyn AsAABB) -> Vec<&Object> {
+		let center_tile = pos_to_tile(aabb);
+
+		let edges = points_on_circumference(center_tile, 16);
+
+		let mut visible_objects: Vec<&Object> = Vec::new();
+
+		let rays = edges
+			.into_iter()
+			.map(|edge| points_on_line(center_tile, edge));
+
+		let objects = || {
+			self.collidable_objects
+				.iter()
+				.chain(self.background_objects.iter())
+		};
+
+		for ray in rays {
+			'ray: for pos in ray.into_iter() {
+				if let Some(obj) = objects().find(|obj| obj.pos == pos) {
+					visible_objects.push(obj);
+
+					if obj.is_collidable() {
+						break 'ray;
+					}
+				}
+			}
+		}
+
+		visible_objects
+
+		// let center_tile = pos_to_tile(aabb);
 	}
 }
 
@@ -548,16 +604,17 @@ impl Drawable for Map {
 	}
 
 	fn draw(&self) {
-		let room = &self.rooms[self.current_floor_index];
-		room.background_objects
-			.iter()
-			.chain(room.collidable_objects.iter())
+		let floor = self.current_floor();
+
+		floor
+			.visible_objects(unsafe { &PLAYER_AABB })
+			.into_iter()
 			.filter(|o| match &o.door {
 				Some(door) => !door.is_open,
 				None => true,
 			})
 			.for_each(|o| o.draw());
-		room.exit.draw();
+		floor.exit.draw();
 	}
 }
 
@@ -639,8 +696,7 @@ pub fn distance_squared(pos1: IVec2, pos2: IVec2) -> i32 {
 
 /// Convert from a game world position to a tile position
 pub fn pos_to_tile(obj: &dyn AsAABB) -> IVec2 {
-	let aabb = obj.as_aabb();
-	let center = aabb.pos + aabb.size / 2.0;
+	let center = obj.center();
 
 	let tile_pos = (center / Vec2::splat(TILE_SIZE as f32)).round().as_ivec2();
 	tile_pos
