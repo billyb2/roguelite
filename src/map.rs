@@ -14,7 +14,6 @@ use crate::math::points_on_line;
 use crate::math::{aabb_collision, AsAABB, AxisAlignedBoundingBox};
 use crate::monsters::{Monster, SmallRat};
 use crate::player::Player;
-use crate::PLAYER_AABB;
 
 pub const TILE_SIZE: usize = 25;
 
@@ -30,6 +29,12 @@ pub struct Object {
 	is_floor: bool,
 	has_been_seen: bool,
 	door: Option<Door>,
+}
+
+impl PartialEq for Object {
+	fn eq(&self, other: &Self) -> bool {
+		self.pos == other.pos
+	}
 }
 
 impl Object {
@@ -493,6 +498,13 @@ impl Floor {
 			})
 			.unwrap();
 
+		let exit_pos = rooms
+			.choose()
+			.map(|r| (r.top_left + r.bottom_right) / 2)
+			.unwrap();
+
+		// let spawn = (exit_pos * IVec2::splat(TILE_SIZE as i32)).as_vec2() + Vec2::splat(TILE_SIZE as f32);
+
 		let mut objects =
 			vec![MaybeUninit::uninit(); collidable_objects.len() + background_objects.len()];
 
@@ -515,7 +527,7 @@ impl Floor {
 			objects,
 			rooms,
 			exit: Object {
-				pos: IVec2::ZERO,
+				pos: exit_pos,
 				texture: *textures.get("green.webp").unwrap(),
 				door: None,
 				has_been_seen: false,

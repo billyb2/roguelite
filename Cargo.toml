@@ -14,7 +14,6 @@ debug = true
 
 [dependencies]
 macroquad = { git = "https://github.com/billyb2/macroquad", default-features = false }
-glam = { version = "*" }
 rayon = { version = "1" }
 image = { version = "*", default-features = false, features = ["webp"] }
 pathfinding = { version = "3", default-features = false }

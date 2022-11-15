@@ -26,13 +26,7 @@ use macroquad::ui::{root_ui, Skin};
 
 use rayon::prelude::*;
 
-use crate::math::AsAABB;
-
 pub const MAX_VIEW_OF_PLAYER: f32 = 200.0;
-static mut PLAYER_AABB: AxisAlignedBoundingBox = AxisAlignedBoundingBox {
-	pos: Vec2::ZERO,
-	size: Vec2::splat(PLAYER_SIZE),
-};
 
 const DEFAULT_FRAGMENT_SHADER: &'static str = "#version 100
 precision lowp float;
@@ -184,8 +178,6 @@ async fn main() {
 		// Rendering
 		clear_background(BLACK);
 
-		unsafe { PLAYER_AABB.pos = players[0].pos };
-
 		camera.target = players[0].pos();
 		camera.zoom.y = -CAMERA_ZOOM * (screen_width() / screen_height());
 		set_camera(&camera);
@@ -251,6 +243,8 @@ async fn main() {
 			.for_each(|o| {
 				o.draw();
 			});
+
+		map.current_floor().exit().draw();
 
 		material.set_uniform("lowest_light_level", 1.0_f32);
 
