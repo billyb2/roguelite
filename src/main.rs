@@ -24,6 +24,8 @@ use macroquad::miniquad::conf::Platform;
 use macroquad::prelude::*;
 use macroquad::ui::root_ui;
 
+use crate::math::AsAABB;
+
 pub const MAX_VIEW_OF_PLAYER: f32 = 200.0;
 static mut PLAYER_AABB: AxisAlignedBoundingBox = AxisAlignedBoundingBox {
 	pos: Vec2::ZERO,
@@ -70,7 +72,7 @@ async fn main() {
 	io::stdout().flush().unwrap();
 
 	let mut class = String::new();
-	io::stdin().read_line(&mut class).unwrap();
+	// io::stdin().read_line(&mut class).unwrap();
 
 	class = class.to_lowercase();
 	class.pop();

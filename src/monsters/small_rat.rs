@@ -1,8 +1,8 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use crate::draw::Drawable;
 use crate::enchantments::{Enchantment, EnchantmentKind};
-use crate::map::{Floor, TILE_SIZE};
+use crate::map::{pos_to_tile, Floor, Object, TILE_SIZE};
 use crate::math::{aabb_collision, get_angle, AsAABB, AxisAlignedBoundingBox};
 use crate::monsters::Monster;
 use crate::player::{damage_player, Player};
@@ -53,7 +53,6 @@ impl Monster for SmallRat {
 		// Pick all points at least 15 tiles away from all players
 		let pos = *floor
 			.background_objects()
-			.iter()
 			.filter_map(|o| {
 				match o.pos().distance(floor.current_spawn()) > (12 * TILE_SIZE) as f32 {
 					true => Some(o.pos()),
@@ -165,28 +164,28 @@ impl Monster for SmallRat {
 	}
 }
 
-const AGGRO_DISTANCE: f32 = (TILE_SIZE * 6) as f32;
+fn player_in_aggro_range((_, player): &(usize, &Player), visible_objects: &[&Object]) -> bool {
+	if player.health() <= 0.0 {
+		return false;
+	}
 
+	let player_tile_pos = pos_to_tile(*player);
+
+	visible_objects
+		.iter()
+		.any(|o| o.tile_pos() == player_tile_pos)
+}
 // The rat just wanders around a lil in passive mode
 fn passive_mode(my_monster: &mut SmallRat, players: &[Player], floor: &Floor) {
 	my_monster.time_til_move = my_monster.time_til_move.saturating_sub(1);
+	let visible_objects = floor.visible_objects(my_monster, Some(8));
 
 	let find_target = || -> Vec2 {
-		*floor
-			.background_objects()
-			.iter()
-			.filter_map(|o| {
-				let obj_distance = o.pos().distance(my_monster.pos);
-
-				match obj_distance > (TILE_SIZE * 5) as f32 && obj_distance < (TILE_SIZE * 8) as f32
-				{
-					true => Some(o.pos()),
-					false => None,
-				}
-			})
-			.collect::<Vec<Vec2>>()
+		// Choose a random visible tile
+		visible_objects
 			.choose()
-			.unwrap()
+			.map(|obj| obj.center())
+			.unwrap_or(Vec2::ZERO)
 	};
 
 	if my_monster.current_target.is_none() {
@@ -200,7 +199,7 @@ fn passive_mode(my_monster: &mut SmallRat, players: &[Player], floor: &Floor) {
 				size: Vec2::splat(TILE_SIZE as f32),
 			};
 
-			if let Some(path) = floor.find_path(my_monster, &goal_aabb) {
+			if let Some(path) = floor.find_path(my_monster, &goal_aabb, true) {
 				my_monster.current_path = Some((path, 1));
 			} else {
 				my_monster.current_target = Some(Target::Pos(find_target()));
@@ -234,12 +233,11 @@ fn passive_mode(my_monster: &mut SmallRat, players: &[Player], floor: &Floor) {
 		}
 	}
 
-	// If the rat gets within a few tiles of a player, it'll start attack mode
-
+	// If a player is visible to the rat, attack them
 	if let Some((i, _)) = players
 		.iter()
 		.enumerate()
-		.find(|(_, p)| p.pos().distance(my_monster.pos) <= AGGRO_DISTANCE && p.health() > 0.0)
+		.find(|p_info| player_in_aggro_range(p_info, &visible_objects))
 	{
 		my_monster.time_til_move = 30;
 		my_monster.time_spent_moving = 0;
@@ -259,18 +257,19 @@ fn attack_mode(my_monster: &mut SmallRat, players: &[Player], floor: &Floor) {
 		}
 
 		let mut target_player = &players[i];
+		let visible_objects = floor.visible_objects(my_monster, Some(8));
+		let mut distance_from_target = target_player.pos().distance(my_monster.pos);
 
 		// First, check the targeted player is still within aggro distance
-		let mut distance_from_target = target_player.pos().distance(my_monster.pos);
-		let target_in_aggro_range =
-			distance_from_target <= AGGRO_DISTANCE && target_player.health() > 0.0;
+		let target_in_aggro_range = player_in_aggro_range(&(i, target_player), &visible_objects);
 
 		// If it isn't, try to see if there's anohter player within aggro range
 		if !target_in_aggro_range {
 			if let Some((i, p, distance)) = players.iter().enumerate().find_map(|(_, p)| {
+				let target_in_aggro_range = player_in_aggro_range(&(i, p), &visible_objects);
 				let distance_from_target = p.center().distance(my_monster.center());
 
-				match distance_from_target <= AGGRO_DISTANCE {
+				match target_in_aggro_range {
 					true => Some((i, p, distance_from_target)),
 					false => None,
 				}
@@ -288,7 +287,7 @@ fn attack_mode(my_monster: &mut SmallRat, players: &[Player], floor: &Floor) {
 
 		// We now have a player to target, so find the quickest path to get to them
 		if my_monster.current_path.is_none() {
-			if let Some(path) = floor.find_path(my_monster, target_player) {
+			if let Some(path) = floor.find_path(my_monster, target_player, true) {
 				my_monster.current_path = Some((path, 1));
 			}
 		}
@@ -329,7 +328,7 @@ fn attack_mode(my_monster: &mut SmallRat, players: &[Player], floor: &Floor) {
 						my_monster.pos += change;
 					}
 				}
-			} else if let Some(path) = floor.find_path(my_monster, target_player) {
+			} else if let Some(path) = floor.find_path(my_monster, target_player, true) {
 				my_monster.current_path = Some((path, 1));
 			} else {
 				my_monster.current_path = None;

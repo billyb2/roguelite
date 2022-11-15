@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::mem::MaybeUninit;
 
 use macroquad::prelude::*;
 use macroquad::rand::*;
@@ -10,7 +11,6 @@ use crate::math::points_on_line;
 use crate::math::{aabb_collision, AsAABB, AxisAlignedBoundingBox};
 use crate::monsters::{Monster, SmallRat};
 use crate::player::Player;
-use crate::player::PLAYER_SIZE;
 use crate::PLAYER_AABB;
 
 pub const TILE_SIZE: usize = 25;
@@ -118,19 +118,23 @@ impl Room {
 pub struct Floor {
 	spawn: Vec2,
 	rooms: Vec<Room>,
-	pub collidable_objects: Vec<Object>,
-	background_objects: Vec<Object>,
+	pub objects: Vec<Object>,
 	exit: Object,
 }
 
 impl Floor {
-	pub fn background_objects(&self) -> &[Object] {
-		&self.background_objects
+	pub fn get_object_from_pos(&self, pos: IVec2) -> Option<&Object> {
+		self.objects
+			.get((pos.x + pos.y * MAP_WIDTH_TILES as i32) as usize)
+	}
+
+	pub fn background_objects(&self) -> impl Iterator<Item = &Object> {
+		self.objects.iter().filter(|obj| !obj.is_collidable())
 	}
 
 	// Same as collision, but returns the actual Object collided w.
 	pub fn collision_obj<A: AsAABB>(&self, aabb: &A, distance: Vec2) -> Option<&Object> {
-		self.collidable_objects
+		self.objects
 			.iter()
 			.find(|object| object.is_collidable() && aabb_collision(aabb, *object, distance))
 	}
@@ -442,12 +446,12 @@ impl Floor {
 			}
 		};
 
-		let collidable_objects = walls
+		let collidable_objects: Vec<Object> = walls
 			.chain(room_walls)
 			.chain(dungeon_walls.iter().map(pos_to_obj))
 			.collect();
 
-		let background_objects = hallways
+		let background_objects: Vec<Object> = hallways
 			.iter()
 			.map(|&pos| Object {
 				pos,
@@ -465,10 +469,26 @@ impl Floor {
 			})
 			.unwrap();
 
+		let mut objects =
+			vec![MaybeUninit::uninit(); collidable_objects.len() + background_objects.len()];
+
+		collidable_objects
+			.into_iter()
+			.chain(background_objects.into_iter())
+			.for_each(|obj| {
+				let new_obj =
+					&mut objects[(obj.pos.x + obj.pos.y * MAP_WIDTH_TILES as i32) as usize];
+				new_obj.write(obj);
+			});
+
+		let objects = objects
+			.into_iter()
+			.map(|obj| unsafe { obj.assume_init() })
+			.collect();
+
 		Floor {
 			spawn,
-			collidable_objects,
-			background_objects,
+			objects,
 			rooms,
 			exit: Object {
 				pos: IVec2::ZERO,
@@ -480,13 +500,13 @@ impl Floor {
 	}
 
 	pub fn doors(&mut self) -> impl Iterator<Item = &mut Door> {
-		self.collidable_objects
-			.iter_mut()
-			.filter_map(|obj| obj.door.as_mut())
+		self.objects.iter_mut().filter_map(|obj| obj.door.as_mut())
 	}
 
-	pub fn find_path(&self, pos: &dyn AsAABB, goal: &dyn AsAABB) -> Option<Vec<Vec2>> {
-		find_path(pos, goal, &self.collidable_objects)
+	pub fn find_path(
+		&self, pos: &dyn AsAABB, goal: &dyn AsAABB, only_visible: bool,
+	) -> Option<Vec<Vec2>> {
+		find_path(pos, goal, &self, only_visible)
 	}
 
 	pub fn should_descend(&self, players: &[Player], _monsters: &[Box<dyn Monster>]) -> bool {
@@ -496,26 +516,21 @@ impl Floor {
 			.any(|p| aabb_collision(p, &self.exit, Vec2::ZERO))
 	}
 
-	pub fn visible_objects(&self, aabb: &dyn AsAABB) -> Vec<&Object> {
+	pub fn visible_objects(&self, aabb: &dyn AsAABB, size: Option<i32>) -> Vec<&Object> {
 		let center_tile = pos_to_tile(aabb);
 
-		let edges = points_on_circumference(center_tile, 16);
-
-		let mut visible_objects: Vec<&Object> = Vec::new();
+		let edges = points_on_circumference(center_tile, size.unwrap_or(12));
 
 		let rays = edges
 			.into_iter()
 			.map(|edge| points_on_line(center_tile, edge));
 
-		let objects = || {
-			self.collidable_objects
-				.iter()
-				.chain(self.background_objects.iter())
-		};
+		let mut visible_objects: Vec<&Object> =
+			Vec::with_capacity(rays.len() * size.unwrap_or(12) as usize);
 
 		for ray in rays {
 			'ray: for pos in ray.into_iter() {
-				if let Some(obj) = objects().find(|obj| obj.pos == pos) {
+				if let Some(obj) = self.get_object_from_pos(pos) {
 					visible_objects.push(obj);
 
 					if obj.is_collidable() {
@@ -526,8 +541,6 @@ impl Floor {
 		}
 
 		visible_objects
-
-		// let center_tile = pos_to_tile(aabb);
 	}
 }
 
@@ -607,7 +620,7 @@ impl Drawable for Map {
 		let floor = self.current_floor();
 
 		floor
-			.visible_objects(unsafe { &PLAYER_AABB })
+			.visible_objects(unsafe { &PLAYER_AABB }, None)
 			.into_iter()
 			.filter(|o| match &o.door {
 				Some(door) => !door.is_open,
@@ -618,53 +631,61 @@ impl Drawable for Map {
 	}
 }
 
-fn find_viable_neighbors(collidable_objects: &[Object], pos: IVec2) -> Vec<(IVec2, i32)> {
+fn find_viable_neighbors(
+	collidable_objects: &[Object], pos: IVec2, visible_objects: &Option<Vec<&Object>>,
+) -> Vec<(IVec2, i32)> {
 	let change = IVec4::new(-1, -1, 1, 1);
 	let new_pos = IVec4::new(pos.x, pos.y, pos.x, pos.y) + change;
 
-	let mut potential_neighbors = [
-		Some(IVec2::new(new_pos.x, pos.y)),
-		Some(IVec2::new(new_pos.z, pos.y)),
-		Some(IVec2::new(pos.x, new_pos.y)),
-		Some(IVec2::new(pos.x, new_pos.w)),
+	let potential_neighbors = [
+		IVec2::new(new_pos.x, pos.y),
+		IVec2::new(new_pos.z, pos.y),
+		IVec2::new(pos.x, new_pos.y),
+		IVec2::new(pos.x, new_pos.w),
 	];
 
-	potential_neighbors.iter_mut().for_each(|new_pos| {
-		let p = unsafe { new_pos.unwrap_unchecked() };
+	potential_neighbors
+		.into_iter()
+		.filter(|new_pos| {
+			let p = new_pos;
 
-		if p.cmplt(IVec2::ZERO).any() || p.cmpgt(MAP_SIZE_TILES).any() {
-			*new_pos = None;
-		}
-	});
-
-	collidable_objects.iter().for_each(|c| {
-		potential_neighbors.iter_mut().for_each(|p| {
-			if let Some(p_clone) = *p {
-				// If any potential_neighbors are a collidable object, remove them from the pool
-				if c.is_collidable() && p_clone == c.pos {
-					*p = None;
-				}
+			// OOB objects automatically are not eligible
+			if p.cmplt(IVec2::ZERO).any() || p.cmpgt(MAP_SIZE_TILES).any() {
+				false
+			} else if let Some(visible_objects) = visible_objects {
+				let is_visible = visible_objects.iter().any(|obj| obj.pos == *p);
+				// Only return visible objects as potential neighbors
+				is_visible
+			} else {
+				true
 			}
 		})
-	});
-
-	potential_neighbors
-		.iter()
-		.filter_map(|p| p.map(|p| (p, 1)))
+		.filter(
+			|pos| match get_object_from_pos_list(*pos, collidable_objects) {
+				Some(obj) => !obj.is_collidable(),
+				None => true,
+			},
+		)
+		.map(|pos| (pos, 1))
 		.collect()
 }
 
 pub fn find_path(
-	start: &dyn AsAABB, goal: &dyn AsAABB, collidable_objects: &[Object],
+	start: &dyn AsAABB, goal: &dyn AsAABB, floor: &Floor, only_visible: bool,
 ) -> Option<Vec<Vec2>> {
 	let aabb = start.as_aabb();
 
 	let start_tile_pos = pos_to_tile(start);
 	let goal_tile_pos = pos_to_tile(goal);
 
+	let visible_objects = match only_visible {
+		true => Some(floor.visible_objects(start, None)),
+		false => None,
+	};
+
 	let path = astar(
 		&start_tile_pos,
-		|pos| find_viable_neighbors(collidable_objects, *pos),
+		|pos| find_viable_neighbors(&floor.objects, *pos, &visible_objects),
 		|pos| distance_squared(*pos, goal_tile_pos),
 		|pos| *pos == goal_tile_pos,
 	);
@@ -681,7 +702,7 @@ fn spawn_monsters(
 	_floor_num: usize, monsters: &mut Vec<Box<dyn Monster>>, textures: &HashMap<String, Texture2D>,
 	floor: &Floor,
 ) {
-	monsters.extend((0..35).map(|_| {
+	monsters.extend((0..85).map(|_| {
 		let monster: Box<dyn Monster> = Box::new(SmallRat::new(textures, floor));
 		monster
 	}));
@@ -700,4 +721,14 @@ pub fn pos_to_tile(obj: &dyn AsAABB) -> IVec2 {
 
 	let tile_pos = (center / Vec2::splat(TILE_SIZE as f32)).round().as_ivec2();
 	tile_pos
+}
+
+fn get_object_from_pos<'a>(pos: IVec2, obj_list: &[&'a Object]) -> Option<&'a Object> {
+	obj_list
+		.get((pos.x + pos.y * MAP_WIDTH_TILES as i32) as usize)
+		.map(|o| *o)
+}
+
+fn get_object_from_pos_list(pos: IVec2, obj_list: &[Object]) -> Option<&Object> {
+	obj_list.get((pos.x + pos.y * MAP_WIDTH_TILES as i32) as usize)
 }

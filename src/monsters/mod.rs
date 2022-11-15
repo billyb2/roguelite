@@ -40,12 +40,10 @@ pub trait Monster: AsAABB + Drawable + Send {
 pub fn update_monsters(
 	monsters: &mut Vec<Box<dyn Monster>>, players: &mut [Player], floor: &Floor,
 ) {
-	// Each thread does 4 monsters at a time, since inidividual monsters aren't too
-	// expensive
 	monsters.par_iter_mut().for_each(|m| {
 		// Only move monsters that are within a certain distance of any player
 		m.update_enchantments();
-		m.movement(players, floor)
+		m.movement(players, floor);
 	});
 
 	monsters.retain_mut(|m| {
