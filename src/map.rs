@@ -1,5 +1,8 @@
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::mem::MaybeUninit;
+use std::rc::Rc;
+use std::slice;
 
 use macroquad::prelude::*;
 use macroquad::rand::*;
@@ -25,6 +28,7 @@ pub struct Object {
 	pos: IVec2,
 	texture: Texture2D,
 	is_floor: bool,
+	has_been_seen: bool,
 	door: Option<Door>,
 }
 
@@ -42,6 +46,14 @@ impl Object {
 			Some(door) => !door.is_open,
 			None => true,
 		}
+	}
+
+	pub fn door(&self) -> &Option<Door> {
+		&self.door
+	}
+
+	pub fn has_been_seen(&self) -> bool {
+		self.has_been_seen
 	}
 }
 
@@ -126,6 +138,11 @@ impl Floor {
 	pub fn get_object_from_pos(&self, pos: IVec2) -> Option<&Object> {
 		self.objects
 			.get((pos.x + pos.y * MAP_WIDTH_TILES as i32) as usize)
+	}
+
+	pub fn get_object_from_pos_mut(&mut self, pos: IVec2) -> Option<&mut Object> {
+		self.objects
+			.get_mut((pos.x + pos.y * MAP_WIDTH_TILES as i32) as usize)
 	}
 
 	pub fn background_objects(&self) -> impl Iterator<Item = &Object> {
@@ -362,12 +379,14 @@ impl Floor {
 						pos: IVec2::new(x, 0),
 						texture: *textures.get("black.webp").unwrap(),
 						door: None,
+						has_been_seen: false,
 						is_floor: false,
 					},
 					Object {
 						pos: IVec2::new(x, MAP_HEIGHT_TILES as i32),
 						texture: *textures.get("black.webp").unwrap(),
 						door: None,
+						has_been_seen: false,
 						is_floor: false,
 					},
 				]
@@ -379,12 +398,14 @@ impl Floor {
 						pos: IVec2::new(0, y),
 						texture: *textures.get("black.webp").unwrap(),
 						door: None,
+						has_been_seen: false,
 						is_floor: false,
 					},
 					Object {
 						pos: IVec2::new(MAP_WIDTH_TILES as i32, y),
 						texture: *textures.get("black.webp").unwrap(),
 						door: None,
+						has_been_seen: false,
 						is_floor: false,
 					},
 				]
@@ -412,6 +433,7 @@ impl Floor {
 					pos: w_pos,
 					texture,
 					is_floor: false,
+					has_been_seen: false,
 					door,
 				}
 			});
@@ -442,6 +464,7 @@ impl Floor {
 					})
 					.unwrap(),
 				door: None,
+				has_been_seen: false,
 				is_floor: !is_dungeon_wall,
 			}
 		};
@@ -457,6 +480,7 @@ impl Floor {
 				pos,
 				texture: *textures.get("light_gray.webp").unwrap(),
 				door: None,
+				has_been_seen: false,
 				is_floor: true,
 			})
 			.chain(floor.iter().map(pos_to_obj))
@@ -494,9 +518,14 @@ impl Floor {
 				pos: IVec2::ZERO,
 				texture: *textures.get("green.webp").unwrap(),
 				door: None,
+				has_been_seen: false,
 				is_floor: true,
 			},
 		}
+	}
+
+	pub fn exit(&self) -> &Object {
+		&self.exit
 	}
 
 	pub fn doors(&mut self) -> impl Iterator<Item = &mut Door> {
@@ -516,6 +545,39 @@ impl Floor {
 			.any(|p| aabb_collision(p, &self.exit, Vec2::ZERO))
 	}
 
+	pub fn visible_objects_mut<'a>(
+		aabb: &dyn AsAABB, size: Option<i32>, objects: &'a mut [Object],
+	) -> Vec<&'a Object> {
+		let center_tile = pos_to_tile(aabb);
+
+		let edges = points_on_circumference(center_tile, size.unwrap_or(12));
+
+		let rays = edges
+			.into_iter()
+			.map(|edge| points_on_line(center_tile, edge));
+
+		let mut visible_objects = Vec::with_capacity(rays.len() * size.unwrap_or(12) as usize);
+
+		for ray in rays {
+			'ray: for pos in ray.into_iter() {
+				if let Some(obj) = get_object_from_pos_mut(pos, unsafe {
+					// Evil borrow laundering
+					slice::from_raw_parts_mut(objects.as_mut_ptr(), objects.len())
+				}) {
+					obj.has_been_seen = true;
+					let obj = &*obj;
+					visible_objects.push(obj);
+
+					if obj.is_collidable() {
+						break 'ray;
+					}
+				}
+			}
+		}
+
+		visible_objects
+	}
+
 	pub fn visible_objects(&self, aabb: &dyn AsAABB, size: Option<i32>) -> Vec<&Object> {
 		let center_tile = pos_to_tile(aabb);
 
@@ -525,8 +587,7 @@ impl Floor {
 			.into_iter()
 			.map(|edge| points_on_line(center_tile, edge));
 
-		let mut visible_objects: Vec<&Object> =
-			Vec::with_capacity(rays.len() * size.unwrap_or(12) as usize);
+		let mut visible_objects = Vec::with_capacity(rays.len() * size.unwrap_or(12) as usize);
 
 		for ray in rays {
 			'ray: for pos in ray.into_iter() {
@@ -616,19 +677,7 @@ impl Drawable for Map {
 		Vec2::ZERO
 	}
 
-	fn draw(&self) {
-		let floor = self.current_floor();
-
-		floor
-			.visible_objects(unsafe { &PLAYER_AABB }, None)
-			.into_iter()
-			.filter(|o| match &o.door {
-				Some(door) => !door.is_open,
-				None => true,
-			})
-			.for_each(|o| o.draw());
-		floor.exit.draw();
-	}
+	fn draw(&self) {}
 }
 
 fn find_viable_neighbors(
@@ -723,12 +772,9 @@ pub fn pos_to_tile(obj: &dyn AsAABB) -> IVec2 {
 	tile_pos
 }
 
-fn get_object_from_pos<'a>(pos: IVec2, obj_list: &[&'a Object]) -> Option<&'a Object> {
-	obj_list
-		.get((pos.x + pos.y * MAP_WIDTH_TILES as i32) as usize)
-		.map(|o| *o)
+fn get_object_from_pos_mut(pos: IVec2, obj_list: &mut [Object]) -> Option<&mut Object> {
+	obj_list.get_mut((pos.x + pos.y * MAP_WIDTH_TILES as i32) as usize)
 }
-
 fn get_object_from_pos_list(pos: IVec2, obj_list: &[Object]) -> Option<&Object> {
 	obj_list.get((pos.x + pos.y * MAP_WIDTH_TILES as i32) as usize)
 }

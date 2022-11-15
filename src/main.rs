@@ -8,9 +8,9 @@ mod monsters;
 mod player;
 
 use std::collections::HashMap;
-use std::fs;
 use std::io::{self, Write};
 use std::time::{SystemTime, UNIX_EPOCH};
+use std::{fs, ptr};
 
 use attacks::*;
 use draw::*;
@@ -22,7 +22,9 @@ use player::*;
 
 use macroquad::miniquad::conf::Platform;
 use macroquad::prelude::*;
-use macroquad::ui::root_ui;
+use macroquad::ui::{root_ui, Skin};
+
+use rayon::prelude::*;
 
 use crate::math::AsAABB;
 
@@ -37,6 +39,7 @@ precision lowp float;
 varying vec2 uv;
 uniform sampler2D Texture;
 uniform lowp vec2 player_pos;
+uniform lowp float lowest_light_level;
 
 void main() {
     gl_FragColor = texture2D(Texture, uv);
@@ -44,6 +47,7 @@ void main() {
 	frag_coord.y = 600.0 - gl_FragCoord.y;
 
 	float lighting = 1.0 - min(length(frag_coord - player_pos), 400.0) / 400.0;
+	lighting *= lowest_light_level;
 	gl_FragColor.rgb *= vec3(lighting * 0.8);
 }
 ";
@@ -135,11 +139,22 @@ async fn main() {
 		&fragment_shader,
 		MaterialParams {
 			pipeline_params,
-			uniforms: vec![("player_pos".to_string(), UniformType::Float2)],
+			uniforms: vec![
+				("player_pos".to_string(), UniformType::Float2),
+				("lowest_light_level".to_string(), UniformType::Float1),
+			],
 			..Default::default()
 		},
 	)
 	.unwrap();
+
+	let label_style = root_ui().style_builder().text_color(WHITE).build();
+	let skin = Skin {
+		label_style,
+		..root_ui().default_skin()
+	};
+
+	root_ui().push_skin(&skin);
 
 	loop {
 		let frame_time = get_frame_time();
@@ -179,10 +194,28 @@ async fn main() {
 
 		gl_use_material(material);
 
-		map.draw();
+		// Draw all visible objects
+		let visible_objects =
+			Floor::visible_objects_mut(&players[0], None, &mut map.current_floor_mut().objects);
 
-		let visible_objects = map.current_floor().visible_objects(&players[0], None);
+		let door_filter = |o: &&Object| -> bool {
+			match o.door() {
+				Some(door) => !door.is_open,
+				None => true,
+			}
+		};
 
+		material.set_uniform("lowest_light_level", 1.0_f32);
+
+		visible_objects
+			.iter()
+			.map(|obj| *obj)
+			.filter(door_filter)
+			.for_each(|o| {
+				o.draw();
+			});
+
+		// Draw all monsters on top of a visible object tile
 		monsters
 			.iter()
 			.filter(|m| {
@@ -194,6 +227,32 @@ async fn main() {
 				should_be_drawn
 			})
 			.for_each(|m| m.draw());
+
+		material.set_uniform("lowest_light_level", 0.6_f32);
+
+		let visible_objects = map.current_floor().visible_objects(&players[0], None);
+
+		let only_show_past_seen_objects = |obj: &&Object| -> bool {
+			let is_currently_visible = visible_objects
+				.iter()
+				.any(|v_obj| v_obj.tile_pos() == obj.tile_pos());
+
+			obj.has_been_seen() && !is_currently_visible
+		};
+
+		// Draw all objects that have been seen
+		map.current_floor()
+			.objects
+			.par_iter()
+			.filter(door_filter)
+			.filter(only_show_past_seen_objects)
+			.collect::<Vec<&Object>>()
+			.into_iter()
+			.for_each(|o| {
+				o.draw();
+			});
+
+		material.set_uniform("lowest_light_level", 1.0_f32);
 
 		players
 			.iter()
