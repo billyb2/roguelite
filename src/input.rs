@@ -37,11 +37,11 @@ pub fn keyboard_input(
 	}
 
 	if is_key_pressed(KeyCode::O) {
-		interact_with_door(player, DoorInteraction::Opening, floor);
+		interact_with_door(player, DoorInteraction::Opening, floor, textures);
 	}
 
 	if is_key_pressed(KeyCode::C) {
-		interact_with_door(player, DoorInteraction::Closing, floor);
+		interact_with_door(player, DoorInteraction::Closing, floor, textures);
 	}
 
 	let mouse_pos = mouse_position_local();

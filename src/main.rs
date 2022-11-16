@@ -191,22 +191,11 @@ async fn main() {
 		let visible_objects =
 			Floor::visible_objects_mut(&players[0], None, &mut map.current_floor_mut().objects);
 
-		let door_filter = |o: &&Object| -> bool {
-			match o.door() {
-				Some(door) => !door.is_open,
-				None => true,
-			}
-		};
-
 		material.set_uniform("lowest_light_level", 1.0_f32);
 
-		visible_objects
-			.iter()
-			.map(|obj| *obj)
-			.filter(door_filter)
-			.for_each(|o| {
-				o.draw();
-			});
+		visible_objects.iter().map(|obj| *obj).for_each(|o| {
+			o.draw();
+		});
 
 		// Draw all monsters on top of a visible object tile
 		monsters
@@ -237,7 +226,6 @@ async fn main() {
 		map.current_floor()
 			.objects
 			.par_iter()
-			.filter(door_filter)
 			.filter(only_show_past_seen_objects)
 			.collect::<Vec<&Object>>()
 			.into_iter()

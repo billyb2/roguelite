@@ -6,6 +6,7 @@ use macroquad::prelude::*;
 use macroquad::rand;
 use macroquad::rand::*;
 use pathfinding::prelude::*;
+use rayon::prelude::*;
 
 use crate::draw::Drawable;
 use crate::math::points_on_circumference;
@@ -70,6 +71,20 @@ impl Object {
 
 	pub fn has_been_seen(&self) -> bool {
 		self.has_been_seen
+	}
+
+	pub fn open_door(&mut self, textures: &HashMap<String, Texture2D>) {
+		if let Some(door) = &mut self.door {
+			self.texture = *textures.get("open_door.webp").unwrap();
+			door.open();
+		}
+	}
+
+	pub fn close_door(&mut self, textures: &HashMap<String, Texture2D>) {
+		if let Some(door) = &mut self.door {
+			self.texture = *textures.get("door.webp").unwrap();
+			door.close();
+		}
 	}
 }
 
@@ -563,9 +578,9 @@ impl Floor {
 		let mut objects =
 			vec![MaybeUninit::uninit(); collidable_objects.len() + background_objects.len()];
 
-		collidable_objects
+		background_objects
 			.into_iter()
-			.chain(background_objects.into_iter())
+			.chain(collidable_objects.into_iter())
 			.for_each(|obj| {
 				let new_obj =
 					&mut objects[(obj.pos.x + obj.pos.y * MAP_WIDTH_TILES as i32) as usize];
@@ -596,8 +611,8 @@ impl Floor {
 		&self.exit
 	}
 
-	pub fn doors(&mut self) -> impl Iterator<Item = &mut Door> {
-		self.objects.iter_mut().filter_map(|obj| obj.door.as_mut())
+	pub fn doors(&mut self) -> impl Iterator<Item = &mut Object> {
+		self.objects.iter_mut().filter(|obj| obj.door.is_some())
 	}
 
 	pub fn untriggered_traps(&mut self) -> impl Iterator<Item = &mut Object> {

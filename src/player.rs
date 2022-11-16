@@ -154,23 +154,27 @@ pub enum DoorInteraction {
 	Closing,
 }
 
-pub fn interact_with_door(
-	player: &mut Player, door_interaction: DoorInteraction, floor: &mut Floor,
+pub fn interact_with_door<A: AsAABB>(
+	entity: &mut A, door_interaction: DoorInteraction, floor: &mut Floor,
+	textures: &HashMap<String, Texture2D>,
 ) {
 	// First, see if the player is in contact with a door
-	let player_tile_pos = pos_to_tile(player);
+	let entity_tile_pos = pos_to_tile(entity);
 
 	// Find all door that's within one tile distance of the player, then pick the closest one
 
 	let door = floor
 		.doors()
 		.filter(|door| {
-			let tile_distance = (door.pos() - player_tile_pos).abs();
+			let tile_distance = (door.tile_pos() - entity_tile_pos).abs();
 
 			// You can't open or close doors that you're inside of
-			tile_distance.cmple(IVec2::ONE).all() && !door.pos().eq(&player_tile_pos)
+			tile_distance.cmple(IVec2::ONE).all() && !door.tile_pos().eq(&entity_tile_pos)
 		})
-		.reduce(|door, door2| {
+		.reduce(|door_obj, door2_obj| {
+			let door = &door_obj.door().unwrap();
+			let door2 = &door_obj.door().unwrap();
+
 			// First, depending on the action the player is taking, we can pretty easily decide of the player wants to open or close the door
 			let door_will_be_affected = match door_interaction {
 				DoorInteraction::Opening => !door.is_open,
@@ -185,28 +189,28 @@ pub fn interact_with_door(
 			if door_will_be_affected && door2_will_be_affected {
 				let door_distance = (door.pos() * IVec2::splat(TILE_SIZE as i32))
 					.as_vec2()
-					.distance_squared(player.pos);
+					.distance_squared(entity.center());
 				let door2_distance = (door.pos() * IVec2::splat(TILE_SIZE as i32))
 					.as_vec2()
-					.distance_squared(player.pos);
+					.distance_squared(entity.center());
 
 				match door_distance < door2_distance {
-					true => door,
-					false => door2,
+					true => door_obj,
+					false => door2_obj,
 				}
 			} else {
 				if door_will_be_affected {
-					door
+					door_obj
 				} else {
-					door2
+					door2_obj
 				}
 			}
 		});
 
 	if let Some(door) = door {
 		match door_interaction {
-			DoorInteraction::Opening => door.open(),
-			DoorInteraction::Closing => door.close(),
+			DoorInteraction::Opening => door.open_door(textures),
+			DoorInteraction::Closing => door.close_door(textures),
 		};
 	}
 }
