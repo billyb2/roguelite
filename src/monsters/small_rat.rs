@@ -210,7 +210,7 @@ fn passive_mode(my_monster: &mut SmallRat, players: &[Player], floor: &Floor) {
 
 		if let Some((path, i)) = &mut my_monster.current_path {
 			if let Some(pos) = path.get(*i) {
-				if my_monster_center.distance(*pos) <= TILE_SIZE as f32 {
+				if my_monster_center.distance(*pos) <= SIZE {
 					*i += 1;
 				} else {
 					const PASSIVE_SPEED: f32 = 0.75;
@@ -218,9 +218,13 @@ fn passive_mode(my_monster: &mut SmallRat, players: &[Player], floor: &Floor) {
 					let angle = get_angle(pos.x, pos.y, my_monster.pos.x, my_monster.pos.y);
 					let change = Vec2::new(angle.cos(), angle.sin()) * PASSIVE_SPEED;
 
-					if floor.collision(my_monster, change) {
-						my_monster.current_path = None;
-						my_monster.current_target = None;
+					if let Some(obj) = floor.collision_obj(my_monster, change) {
+						if obj.door().is_some() {
+							my_monster.current_path = None;
+							my_monster.current_target = None;
+						} else {
+							my_monster.pos += change;
+						}
 					} else {
 						my_monster.pos += change;
 					}
@@ -297,7 +301,7 @@ fn attack_mode(my_monster: &mut SmallRat, players: &[Player], floor: &Floor) {
 		if let Some((path, i)) = &mut my_monster.current_path {
 			if let Some(pos) = path.get(*i) {
 				let distance_to_next_tile = my_monster_center.distance(*pos);
-				if distance_to_next_tile <= SIZE / 2.0 {
+				if distance_to_next_tile <= SIZE / 4.0 {
 					/*
 					let angle = get_angle(pos.x, pos.y, my_monster_center.x, my_monster_center.y);
 					let change = Vec2::new(angle.cos(), angle.sin()) * distance_to_next_tile;
@@ -311,19 +315,23 @@ fn attack_mode(my_monster: &mut SmallRat, players: &[Player], floor: &Floor) {
 					let change = Vec2::new(angle.cos(), angle.sin()) * 1.1;
 
 					if let Some(obj) = floor.collision_obj(my_monster, change) {
-						let angle = get_angle(
-							obj.center().x,
-							obj.center().y,
-							my_monster_center.x,
-							my_monster_center.y,
-						);
+						if obj.door().is_some() {
+							let angle = get_angle(
+								obj.center().x,
+								obj.center().y,
+								my_monster_center.x,
+								my_monster_center.y,
+							);
 
-						let change = Vec2::new(angle.cos(), angle.sin());
-						my_monster.pos -= change;
+							let change = Vec2::new(angle.cos(), angle.sin());
+							my_monster.pos -= change;
 
-						my_monster.current_path = None;
-						// my_monster.current_target = None;
-						my_monster.time_til_move = 0;
+							my_monster.current_path = None;
+							// my_monster.current_target = None;
+							my_monster.time_til_move = 0;
+						} else {
+							my_monster.pos += change;
+						}
 					} else {
 						my_monster.pos += change;
 					}

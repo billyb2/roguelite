@@ -8,15 +8,14 @@ mod monsters;
 mod player;
 
 use std::collections::HashMap;
+use std::fs;
 use std::io::{self, Write};
 use std::time::{SystemTime, UNIX_EPOCH};
-use std::{fs, ptr};
 
 use attacks::*;
 use draw::*;
 use input::*;
 use map::*;
-use math::AxisAlignedBoundingBox;
 use monsters::*;
 use player::*;
 
@@ -60,7 +59,7 @@ void main() {
 }
 ";
 
-const CAMERA_ZOOM: f32 = 0.0045;
+const CAMERA_ZOOM: f32 = 0.0025;
 
 #[macroquad::main(window_conf)]
 async fn main() {
@@ -167,6 +166,8 @@ async fn main() {
 			&textures,
 			map.current_floor_mut(),
 		);
+
+		trigger_traps(&mut players, map.current_floor_mut());
 		update_cooldowns(&mut players);
 		update_attacks(&mut players, &mut monsters, map.current_floor());
 		update_monsters(&mut monsters, &mut players, map.current_floor());
@@ -220,7 +221,7 @@ async fn main() {
 			})
 			.for_each(|m| m.draw());
 
-		material.set_uniform("lowest_light_level", 0.6_f32);
+		material.set_uniform("lowest_light_level", 0.65_f32);
 
 		let visible_objects = map.current_floor().visible_objects(&players[0], None);
 

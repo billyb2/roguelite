@@ -1,10 +1,9 @@
-use std::cell::RefCell;
 use std::collections::HashMap;
 use std::mem::MaybeUninit;
-use std::rc::Rc;
 use std::slice;
 
 use macroquad::prelude::*;
+use macroquad::rand;
 use macroquad::rand::*;
 use pathfinding::prelude::*;
 
@@ -23,12 +22,24 @@ pub const MAP_HEIGHT_TILES: usize = 80;
 pub const MAP_SIZE_TILES: IVec2 = IVec2::new(MAP_WIDTH_TILES as i32, MAP_HEIGHT_TILES as i32);
 
 #[derive(Copy, Clone)]
+enum TrapType {
+	Teleport,
+}
+
+#[derive(Copy, Clone)]
+struct Trap {
+	triggered: bool,
+	trap_type: TrapType,
+}
+
+#[derive(Copy, Clone)]
 pub struct Object {
 	pos: IVec2,
 	texture: Texture2D,
 	is_floor: bool,
 	has_been_seen: bool,
 	door: Option<Door>,
+	trap: Option<Trap>,
 }
 
 impl PartialEq for Object {
@@ -124,6 +135,73 @@ impl Room {
 					}),
 			)
 			.collect()
+	}
+
+	fn generate_wall_objects(&self, textures: &HashMap<String, Texture2D>) -> Vec<Object> {
+		self.generate_walls()
+			.into_iter()
+			.map(|w_pos| {
+				let door = self
+					.doors
+					.iter()
+					.find(|d| d.pos == w_pos)
+					.map(|d| d.clone());
+
+				let texture = *textures
+					.get(match door.is_some() {
+						true => "door.webp",
+						false => "black.webp",
+					})
+					.unwrap();
+
+				Object {
+					pos: w_pos,
+					texture,
+					is_floor: false,
+					trap: None,
+					has_been_seen: false,
+					door,
+				}
+			})
+			.collect()
+	}
+
+	fn generate_floor(&self, textures: &HashMap<String, Texture2D>) -> Vec<Object> {
+		let map_object = |x: i32, y: i32| -> Object {
+			// 1 in 250 chance of being a trapped tile
+			let is_trap: bool = rand::gen_range(1, 250) == 100;
+
+			let trap = match is_trap {
+				true => Some(Trap {
+					triggered: false,
+					trap_type: TrapType::Teleport,
+				}),
+				false => None,
+			};
+
+			let texture = match is_trap {
+				true => *textures.get("trap.webp").unwrap(),
+				false => *textures.get("light_gray.webp").unwrap(),
+			};
+
+			Object {
+				pos: IVec2::new(x, y),
+				texture,
+				is_floor: true,
+				has_been_seen: false,
+				door: None,
+				trap,
+			}
+		};
+
+		((self.top_left.x..self.bottom_right.x)
+			.into_iter()
+			.flat_map(|x| {
+				(self.top_left.y..self.bottom_right.y)
+					.into_iter()
+					.map(move |y| map_object(x, y))
+			}))
+		.collect()
 	}
 
 	/// Returns whether or not a position is inside a room
@@ -386,6 +464,7 @@ impl Floor {
 						door: None,
 						has_been_seen: false,
 						is_floor: false,
+						trap: None,
 					},
 					Object {
 						pos: IVec2::new(x, MAP_HEIGHT_TILES as i32),
@@ -393,6 +472,7 @@ impl Floor {
 						door: None,
 						has_been_seen: false,
 						is_floor: false,
+						trap: None,
 					},
 				]
 				.into_iter()
@@ -405,6 +485,7 @@ impl Floor {
 						door: None,
 						has_been_seen: false,
 						is_floor: false,
+						trap: None,
 					},
 					Object {
 						pos: IVec2::new(MAP_WIDTH_TILES as i32, y),
@@ -412,6 +493,7 @@ impl Floor {
 						door: None,
 						has_been_seen: false,
 						is_floor: false,
+						trap: None,
 					},
 				]
 				.into_iter()
@@ -420,64 +502,36 @@ impl Floor {
 
 		let room_walls = rooms
 			.iter()
-			.flat_map(|room: &Room| room.generate_walls())
-			.map(|w_pos| {
-				let door = rooms
-					.iter()
-					.find_map(|r| r.doors.iter().find(|d| d.pos == w_pos))
-					.map(|d| d.clone());
-
-				let texture = *textures
-					.get(match door.is_some() {
-						true => "door.webp",
-						false => "black.webp",
-					})
-					.unwrap();
-
-				Object {
-					pos: w_pos,
-					texture,
-					is_floor: false,
-					has_been_seen: false,
-					door,
-				}
-			});
+			.flat_map(|room: &Room| room.generate_wall_objects(&textures));
 
 		let rooms_ref = &rooms;
 		let hallways_ref = &hallways;
 
-		let (dungeon_walls, floor): (Vec<_>, Vec<_>) =
-			((0..MAP_WIDTH_TILES).into_iter().flat_map(|x| {
-				(0..MAP_HEIGHT_TILES).into_iter().map(move |y| {
-					let pos = IVec2::new(x as i32, y as i32);
-					let in_room = rooms_ref.iter().any(|r| r.inside_room(pos));
-					let is_hallway = hallways_ref.iter().any(|h| *h == pos);
+		let dungeon_walls = (0..MAP_WIDTH_TILES).into_iter().flat_map(|x| {
+			(0..MAP_HEIGHT_TILES).into_iter().filter_map(move |y| {
+				let pos = IVec2::new(x as i32, y as i32);
+				let in_room = rooms_ref.iter().any(|r| r.inside_room(pos));
+				let is_hallway = hallways_ref.iter().any(|h| *h == pos);
 
-					let is_dungeon_wall = !in_room && !is_hallway;
-					(pos, is_dungeon_wall)
-				})
-			}))
-			.partition(|(_pos, is_dungeon_wall)| *is_dungeon_wall);
+				let is_dungeon_wall = !in_room && !is_hallway;
 
-		let pos_to_obj = |&(pos, is_dungeon_wall): &(IVec2, bool)| -> Object {
-			Object {
-				pos,
-				texture: *textures
-					.get(match is_dungeon_wall {
-						true => "black.webp",
-						false => "light_gray.webp",
+				if is_dungeon_wall {
+					Some(Object {
+						pos,
+						texture: *textures.get("black.webp").unwrap(),
+						is_floor: false,
+						has_been_seen: false,
+						door: None,
+						trap: None,
 					})
-					.unwrap(),
-				door: None,
-				has_been_seen: false,
-				is_floor: !is_dungeon_wall,
-			}
-		};
+				} else {
+					None
+				}
+			})
+		});
 
-		let collidable_objects: Vec<Object> = walls
-			.chain(room_walls)
-			.chain(dungeon_walls.iter().map(pos_to_obj))
-			.collect();
+		let collidable_objects: Vec<Object> =
+			walls.chain(room_walls).chain(dungeon_walls).collect();
 
 		let background_objects: Vec<Object> = hallways
 			.iter()
@@ -486,9 +540,10 @@ impl Floor {
 				texture: *textures.get("light_gray.webp").unwrap(),
 				door: None,
 				has_been_seen: false,
+				trap: None,
 				is_floor: true,
 			})
-			.chain(floor.iter().map(pos_to_obj))
+			.chain(rooms.iter().flat_map(|r| r.generate_floor(textures)))
 			.collect();
 
 		let spawn = rooms
@@ -531,6 +586,7 @@ impl Floor {
 				texture: *textures.get("green.webp").unwrap(),
 				door: None,
 				has_been_seen: false,
+				trap: None,
 				is_floor: true,
 			},
 		}
@@ -542,6 +598,16 @@ impl Floor {
 
 	pub fn doors(&mut self) -> impl Iterator<Item = &mut Door> {
 		self.objects.iter_mut().filter_map(|obj| obj.door.as_mut())
+	}
+
+	pub fn untriggered_traps(&mut self) -> impl Iterator<Item = &mut Object> {
+		self.objects.iter_mut().filter_map(|obj| match &obj.trap {
+			Some(trap) => match trap.triggered {
+				false => Some(obj),
+				true => None,
+			},
+			None => None,
+		})
 	}
 
 	pub fn find_path(
@@ -784,9 +850,39 @@ pub fn pos_to_tile(obj: &dyn AsAABB) -> IVec2 {
 	tile_pos
 }
 
+pub fn trigger_traps(players: &mut [Player], floor: &mut Floor) {
+	let rand_room = floor.rooms.choose().unwrap();
+	let rand_pos = IVec2::new(
+		rand::gen_range(rand_room.top_left.x + 1, rand_room.bottom_right.x - 1),
+		rand::gen_range(rand_room.top_left.y + 1, rand_room.bottom_right.y - 1),
+	);
+
+	let trapped_objs = floor.untriggered_traps();
+
+	trapped_objs.for_each(|trapped_obj| {
+		players.iter_mut().for_each(|player| {
+			let player_tile_pos = pos_to_tile(player);
+
+			if player_tile_pos == trapped_obj.tile_pos() {
+				let trap = &mut trapped_obj.trap.unwrap();
+
+				trap.triggered = true;
+
+				match trap.trap_type {
+					TrapType::Teleport => {
+						// Pick a random background object to teleport the player to
+						player.pos = (rand_pos * IVec2::splat(TILE_SIZE as i32)).as_vec2();
+					},
+				};
+			}
+		});
+	});
+}
+
 fn get_object_from_pos_mut(pos: IVec2, obj_list: &mut [Object]) -> Option<&mut Object> {
 	obj_list.get_mut((pos.x + pos.y * MAP_WIDTH_TILES as i32) as usize)
 }
+
 fn get_object_from_pos_list(pos: IVec2, obj_list: &[Object]) -> Option<&Object> {
 	obj_list.get((pos.x + pos.y * MAP_WIDTH_TILES as i32) as usize)
 }
