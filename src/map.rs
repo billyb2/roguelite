@@ -121,13 +121,17 @@ impl Door {
 	}
 }
 
-struct Room {
+pub struct Room {
 	top_left: IVec2,
 	bottom_right: IVec2,
 	doors: Vec<Door>,
 }
 
 impl Room {
+	pub fn extents(&self) -> (IVec2, IVec2) {
+		(self.top_left, self.bottom_right)
+	}
+
 	fn generate_walls(&self) -> Vec<IVec2> {
 		(self.top_left.x..self.bottom_right.x)
 			.into_iter()
@@ -241,6 +245,10 @@ impl Floor {
 	pub fn get_object_from_pos_mut(&mut self, pos: IVec2) -> Option<&mut Object> {
 		self.objects
 			.get_mut((pos.x + pos.y * MAP_WIDTH_TILES as i32) as usize)
+	}
+
+	pub fn rooms(&self) -> &Vec<Room> {
+		&self.rooms
 	}
 
 	pub fn background_objects(&self) -> impl Iterator<Item = &Object> {
@@ -761,18 +769,6 @@ impl Drawable for Object {
 	}
 }
 
-impl Drawable for Map {
-	fn pos(&self) -> Vec2 {
-		Vec2::ZERO
-	}
-
-	fn size(&self) -> Vec2 {
-		Vec2::ZERO
-	}
-
-	fn draw(&self) {}
-}
-
 fn find_viable_neighbors(
 	collidable_objects: &[Object], pos: IVec2, visible_objects: &Option<Vec<&Object>>,
 ) -> Vec<(IVec2, i32)> {
@@ -834,8 +830,8 @@ pub fn find_path(
 
 	path.map(|(positions, _)| {
 		positions
-			.iter()
-			.map(|pos| (*pos * IVec2::splat(TILE_SIZE as i32)).as_vec2() + (aabb.size * 0.5))
+			.into_iter()
+			.map(|pos| (pos * IVec2::splat(TILE_SIZE as i32)).as_vec2())
 			.collect()
 	})
 }
@@ -844,10 +840,13 @@ fn spawn_monsters(
 	_floor_num: usize, monsters: &mut Vec<Box<dyn Monster>>, textures: &HashMap<String, Texture2D>,
 	floor: &Floor,
 ) {
-	monsters.extend((0..85).map(|_| {
-		let monster: Box<dyn Monster> = Box::new(SmallRat::new(textures, floor));
-		monster
-	}));
+	(0..85)
+		.into_par_iter()
+		.map(|_| {
+			let monster: Box<dyn Monster> = Box::new(SmallRat::new(textures, floor));
+			monster
+		})
+		.collect_into_vec(monsters);
 }
 
 pub fn distance_squared(pos1: IVec2, pos2: IVec2) -> i32 {

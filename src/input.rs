@@ -45,7 +45,7 @@ pub fn keyboard_input(
 	}
 
 	let mouse_pos = mouse_position_local();
-	player.angle = get_angle(mouse_pos.x, mouse_pos.y, 0.0, 0.0);
+	player.angle = get_angle(mouse_pos, Vec2::ZERO);
 
 	if is_mouse_button_down(MouseButton::Left) {
 		attack(

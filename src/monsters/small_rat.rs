@@ -12,6 +12,7 @@ use macroquad::rand::ChooseRandom;
 
 use super::Effect;
 
+#[derive(PartialEq)]
 enum AttackMode {
 	Passive,
 	Attacking,
@@ -50,18 +51,35 @@ pub struct SmallRat {
 
 impl Monster for SmallRat {
 	fn new(textures: &HashMap<String, Texture2D>, floor: &Floor) -> Self {
-		// Pick all points at least 15 tiles away from all players
-		let pos = *floor
-			.background_objects()
-			.filter_map(|o| {
-				match o.pos().distance(floor.current_spawn()) > (12 * TILE_SIZE) as f32 {
-					true => Some(o.pos()),
+		// Choose a room decently far from the player
+		let valid_room_extents = floor
+			.rooms()
+			.iter()
+			.filter_map(|room| {
+				let (room_top_left, room_bottom_right) = room.extents();
+				let room_center = (room_top_left + room_bottom_right) / 2;
+				let room_center_pos = (room_center * IVec2::splat(TILE_SIZE as i32)).as_vec2();
+
+				match room_center_pos.distance(floor.current_spawn()) > (12 * TILE_SIZE) as f32 {
+					true => Some((room_top_left, room_bottom_right)),
 					false => None,
 				}
 			})
-			.collect::<Vec<Vec2>>()
-			.choose()
-			.unwrap();
+			.collect::<Vec<(IVec2, IVec2)>>();
+
+		let (room_top_left, room_bottom_right) = valid_room_extents.choose().unwrap();
+
+		let pos = {
+			// Pick a random position in the room
+			let rand_tile = IVec2::new(
+				rand::gen_range(room_top_left.x + 1, room_bottom_right.x - 1),
+				rand::gen_range(room_top_left.y + 1, room_bottom_right.y - 1),
+			);
+
+			let rand_pos = (rand_tile * IVec2::splat(TILE_SIZE as i32)).as_vec2();
+
+			rand_pos
+		};
 
 		Self {
 			pos,
@@ -91,7 +109,7 @@ impl Monster for SmallRat {
 		players.iter_mut().for_each(|p| {
 			if aabb_collision(p, self, Vec2::ZERO) {
 				const DAMAGE: f32 = 20.0;
-				let damage_direction = get_angle(p.pos().x, p.pos().y, self.pos.x, self.pos.y);
+				let damage_direction = get_angle(p.pos(), self.pos);
 
 				damage_player(p, DAMAGE, damage_direction, floor);
 			}
@@ -175,67 +193,87 @@ fn player_in_aggro_range((_, player): &(usize, &Player), visible_objects: &[&Obj
 		.iter()
 		.any(|o| o.tile_pos() == player_tile_pos)
 }
-// The rat just wanders around a lil in passive mode
-fn passive_mode(my_monster: &mut SmallRat, players: &[Player], floor: &Floor) {
-	my_monster.time_til_move = my_monster.time_til_move.saturating_sub(1);
-	let visible_objects = floor.visible_objects(my_monster, Some(8));
 
-	let find_target = || -> Vec2 {
-		// Choose a random visible tile
-		visible_objects
-			.choose()
-			.map(|obj| obj.center())
-			.unwrap_or(Vec2::ZERO)
-	};
-
-	if my_monster.current_target.is_none() {
-		my_monster.current_target = Some(Target::Pos(find_target()));
-	}
-
+fn step_pathfinding<T: Fn(&mut SmallRat) -> Target>(
+	my_monster: &mut SmallRat, players: &[Player], floor: &Floor, speed: f32, find_target: T,
+) {
 	if my_monster.time_til_move == 0 {
 		if my_monster.current_path.is_none() {
-			let goal_aabb = AxisAlignedBoundingBox {
-				pos: my_monster.current_target.as_ref().unwrap().unwrap_pos(),
-				size: Vec2::splat(TILE_SIZE as f32),
-			};
+			if let Some(target) = my_monster.current_target {
+				let goal_aabb: AxisAlignedBoundingBox = match target {
+					Target::Pos(pos) => AxisAlignedBoundingBox {
+						pos,
+						size: Vec2::splat(TILE_SIZE as f32),
+					},
+					Target::PlayerIndex(i) => {
+						let player = &players[i];
+						player.as_aabb()
+					},
+				};
 
-			if let Some(path) = floor.find_path(my_monster, &goal_aabb, true) {
-				my_monster.current_path = Some((path, 1));
+				if let Some(path) = floor.find_path(my_monster, &goal_aabb, true) {
+					my_monster.current_path = Some((path, 1));
+				} else {
+					my_monster.current_target = Some(find_target(my_monster));
+					return;
+				}
 			} else {
-				my_monster.current_target = Some(Target::Pos(find_target()));
+				my_monster.current_target = Some(find_target(my_monster));
+				return;
 			}
 		}
 
-		let my_monster_center = my_monster.center();
-
 		if let Some((path, i)) = &mut my_monster.current_path {
 			if let Some(pos) = path.get(*i) {
-				if my_monster_center.distance(*pos) <= SIZE {
+				let distance_to_target = my_monster.pos.distance(*pos);
+
+				if speed >= distance_to_target {
+					my_monster.pos = *pos;
 					*i += 1;
 				} else {
-					const PASSIVE_SPEED: f32 = 0.75;
+					let angle = get_angle(*pos, my_monster.pos);
+					let change = Vec2::new(angle.cos(), angle.sin()) * speed;
 
-					let angle = get_angle(pos.x, pos.y, my_monster.pos.x, my_monster.pos.y);
-					let change = Vec2::new(angle.cos(), angle.sin()) * PASSIVE_SPEED;
-
-					if let Some(obj) = floor.collision_obj(my_monster, change) {
-						if obj.door().is_some() {
-							my_monster.current_path = None;
-							my_monster.current_target = None;
-						} else {
-							my_monster.pos += change;
-						}
+					if floor.collision(my_monster, change) {
+						// Only stop targetting when there is a door
+						my_monster.current_path = None;
+						my_monster.current_target = None;
 					} else {
 						my_monster.pos += change;
 					}
 				}
 			} else {
+				// Finished following path
 				my_monster.current_path = None;
 				my_monster.current_target = None;
-				my_monster.time_til_move = rand::gen_range(120_u32, 240).try_into().unwrap();
+				my_monster.time_til_move = 0;
 			}
 		}
 	}
+}
+
+// The rat just wanders around a lil in passive mode
+fn passive_mode(my_monster: &mut SmallRat, players: &[Player], floor: &Floor) {
+	my_monster.time_til_move = my_monster.time_til_move.saturating_sub(1);
+
+	if my_monster.time_til_move > 0 {
+		return;
+	}
+
+	let visible_objects = floor.visible_objects(my_monster, Some(8));
+
+	let find_target = |_my_monster: &mut SmallRat| -> Target {
+		// Choose a random visible tile
+		let target_obj = visible_objects.choose().unwrap();
+		Target::Pos(target_obj.pos())
+	};
+
+	if my_monster.current_target.is_none() {
+		my_monster.current_target = Some(find_target(my_monster));
+		my_monster.current_path = None;
+	}
+
+	step_pathfinding(my_monster, players, floor, 0.75, find_target);
 
 	// If a player is visible to the rat, attack them
 	if let Some((i, _)) = players
@@ -243,7 +281,7 @@ fn passive_mode(my_monster: &mut SmallRat, players: &[Player], floor: &Floor) {
 		.enumerate()
 		.find(|p_info| player_in_aggro_range(p_info, &visible_objects))
 	{
-		my_monster.time_til_move = 30;
+		my_monster.time_til_move = 25;
 		my_monster.time_spent_moving = 0;
 
 		my_monster.attack_mode = AttackMode::Attacking;
@@ -253,112 +291,61 @@ fn passive_mode(my_monster: &mut SmallRat, players: &[Player], floor: &Floor) {
 }
 
 fn attack_mode(my_monster: &mut SmallRat, players: &[Player], floor: &Floor) {
-	if let Some(Target::PlayerIndex(i)) = my_monster.current_target {
-		my_monster.time_til_move = my_monster.time_til_move.saturating_sub(1);
+	my_monster.time_til_move = my_monster.time_til_move.saturating_sub(1);
 
-		if my_monster.time_til_move > 0 {
-			return;
-		}
+	if my_monster.time_til_move > 0 {
+		return;
+	}
 
-		let mut target_player = &players[i];
-		let visible_objects = floor.visible_objects(my_monster, Some(8));
-		let mut distance_from_target = target_player.pos().distance(my_monster.pos);
+	let find_target = |my_monster: &mut SmallRat| {
+		match my_monster.current_target {
+			Some(target) => target,
+			None => {
+				let visible_objects = floor.visible_objects(my_monster, Some(8));
 
-		// First, check the targeted player is still within aggro distance
-		let target_in_aggro_range = player_in_aggro_range(&(i, target_player), &visible_objects);
+				let player_index: Option<usize> =
+					players.iter().enumerate().find_map(|(i, player)| {
+						let p_tile_pos = pos_to_tile(player);
+						let player_is_visible = visible_objects
+							.iter()
+							.any(|v_obj| v_obj.tile_pos() == p_tile_pos);
 
-		// If it isn't, try to see if there's anohter player within aggro range
-		if !target_in_aggro_range {
-			if let Some((i, p, distance)) = players.iter().enumerate().find_map(|(_, p)| {
-				let target_in_aggro_range = player_in_aggro_range(&(i, p), &visible_objects);
-				let distance_from_target = p.center().distance(my_monster.center());
-
-				match target_in_aggro_range {
-					true => Some((i, p, distance_from_target)),
-					false => None,
-				}
-			}) {
-				my_monster.current_target = Some(Target::PlayerIndex(i));
-				target_player = p;
-				distance_from_target = distance;
-			} else {
-				// No players were found in range, just return to passive mode
-				my_monster.current_target = None;
-				my_monster.attack_mode = AttackMode::Passive;
-				return;
-			}
-		}
-
-		// We now have a player to target, so find the quickest path to get to them
-		if my_monster.current_path.is_none() {
-			if let Some(path) = floor.find_path(my_monster, target_player, true) {
-				my_monster.current_path = Some((path, 1));
-			}
-		}
-
-		let my_monster_center = my_monster.center();
-
-		if let Some((path, i)) = &mut my_monster.current_path {
-			if let Some(pos) = path.get(*i) {
-				let distance_to_next_tile = my_monster_center.distance(*pos);
-				if distance_to_next_tile <= SIZE / 4.0 {
-					/*
-					let angle = get_angle(pos.x, pos.y, my_monster_center.x, my_monster_center.y);
-					let change = Vec2::new(angle.cos(), angle.sin()) * distance_to_next_tile;
-
-					my_monster.pos += change;
-					*/
-
-					*i += 1;
-				} else {
-					let angle = get_angle(pos.x, pos.y, my_monster_center.x, my_monster_center.y);
-					let change = Vec2::new(angle.cos(), angle.sin()) * 1.1;
-
-					if let Some(obj) = floor.collision_obj(my_monster, change) {
-						if obj.door().is_some() {
-							let angle = get_angle(
-								obj.center().x,
-								obj.center().y,
-								my_monster_center.x,
-								my_monster_center.y,
-							);
-
-							let change = Vec2::new(angle.cos(), angle.sin());
-							my_monster.pos -= change;
-
-							my_monster.current_path = None;
-							// my_monster.current_target = None;
-							my_monster.time_til_move = 0;
-						} else {
-							my_monster.pos += change;
+						match player_is_visible {
+							true => Some(i),
+							false => None,
 						}
-					} else {
-						my_monster.pos += change;
-					}
-				}
-			} else if let Some(path) = floor.find_path(my_monster, target_player, true) {
-				my_monster.current_path = Some((path, 1));
-			} else {
-				my_monster.current_path = None;
-			}
-		}
+					});
 
+				match player_index {
+					Some(index) => Target::PlayerIndex(index),
+					None => {
+						// If there are no visible players, then just go back to passive mode
+						my_monster.attack_mode = AttackMode::Passive;
+						Target::Pos(my_monster.center())
+					},
+				}
+			},
+		}
+	};
+
+	step_pathfinding(my_monster, players, floor, 1.2, find_target);
+
+	if let Some(Target::PlayerIndex(i)) = my_monster.current_target {
+		let target_player = &players[i];
+
+		let distance_from_target = target_player.center().distance(my_monster.center());
+
+		// When the monster's within range of the player, "lunge" at them
+		if distance_from_target <= TILE_SIZE as f32 {
+			let angle = get_angle(target_player.pos(), my_monster.pos);
+			my_monster.pos += Vec2::new(angle.cos(), angle.sin()) * SIZE;
+			my_monster.time_til_move = 45;
+			my_monster.current_path = None;
+		}
 		// If the player dies, go back to passive mode
 		if target_player.health() == 0.0 {
 			my_monster.attack_mode = AttackMode::Passive;
 			my_monster.current_target = None;
-		}
-
-		// When the monster's within range of the player, "lunge" at them
-		if distance_from_target <= TILE_SIZE as f32 {
-			let angle = get_angle(
-				target_player.pos().x,
-				target_player.pos().y,
-				my_monster.pos.x,
-				my_monster.pos.y,
-			);
-			my_monster.pos += Vec2::new(angle.cos(), angle.sin()) * SIZE;
-			my_monster.time_til_move = 45;
 		}
 	}
 }
@@ -374,7 +361,7 @@ fn move_blindly(my_monster: &mut SmallRat, floor: &Floor) {
 			my_monster.current_target = None;
 		}
 
-		let angle = get_angle(pos.x, pos.y, my_monster.pos.x, my_monster.pos.y);
+		let angle = get_angle(pos, my_monster.pos);
 		let change = Vec2::new(angle.cos(), angle.sin()) * Vec2::splat(1.2);
 
 		if !floor.collision(my_monster, change) {
@@ -385,7 +372,7 @@ fn move_blindly(my_monster: &mut SmallRat, floor: &Floor) {
 				my_monster.pos -= change;
 			}
 			my_monster.current_target = None;
-			//my_monster.time_til_move = 30;
+			my_monster.time_til_move = 30;
 		}
 	} else {
 		let direction = Vec2::new(rand::gen_range(-1.0, 1.0), rand::gen_range(-1.0, 1.0));

@@ -65,8 +65,7 @@ impl Attack for Slash {
 		{
 			const DAMAGE: f32 = 10.0;
 
-			let damage_direction =
-				get_angle(monster.pos().x, monster.pos().y, self.pos.x, self.pos.y);
+			let damage_direction = get_angle(monster.pos(), self.pos);
 			monster.take_damage(DAMAGE, damage_direction, floor);
 
 			return true;
@@ -75,7 +74,9 @@ impl Attack for Slash {
 		false
 	}
 
-	fn cooldown(&self) -> u16 { 30 }
+	fn cooldown(&self) -> u16 {
+		30
+	}
 }
 
 impl AsAABB for Slash {
@@ -88,11 +89,19 @@ impl AsAABB for Slash {
 }
 
 impl Drawable for Slash {
-	fn pos(&self) -> Vec2 { self.pos }
+	fn pos(&self) -> Vec2 {
+		self.pos
+	}
 
-	fn size(&self) -> Vec2 { SIZE }
+	fn size(&self) -> Vec2 {
+		SIZE
+	}
 
-	fn rotation(&self) -> f32 { self.angle }
+	fn rotation(&self) -> f32 {
+		self.angle
+	}
 
-	fn texture(&self) -> Option<Texture2D> { Some(self.texture) }
+	fn texture(&self) -> Option<Texture2D> {
+		Some(self.texture)
+	}
 }

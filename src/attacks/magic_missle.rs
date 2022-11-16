@@ -53,13 +53,13 @@ impl Attack for MagicMissile {
 		if let Some(object) = floor.collision_obj(self, movement) {
 			let object_center = object.pos() + (object.size() / 2.0);
 
-			self.angle = get_angle(self.pos.x, self.pos.y, object_center.x, object_center.y);
+			self.angle = get_angle(self.pos, object_center);
 			self.pos += Vec2::new(self.angle.cos(), self.angle.sin()) * 5.0;
 
 			self.bounces += 1;
 
 			if self.bounces > 3 {
-				return true;
+				self.bounces = 3;
 			}
 		} else {
 			self.pos += movement;
@@ -79,18 +79,19 @@ impl Attack for MagicMissile {
 			// The damage increases the more the projectile bounces
 			let damage = BASE_DAMAGE.pow(1 + self.bounces as u32) as f32;
 
-			let damage_direction =
-				get_angle(monster.pos().x, monster.pos().y, self.pos.x, self.pos.y);
+			let damage_direction = get_angle(monster.pos(), self.pos);
 			monster.take_damage(damage, damage_direction, floor);
 
-			self.angle = get_angle(self.pos.x, self.pos.y, monster.pos().x, monster.pos().y);
+			self.angle = get_angle(self.pos, monster.pos());
 			self.pos += Vec2::new(self.angle.cos(), self.angle.sin()) * 5.0;
 		}
 
 		false
 	}
 
-	fn cooldown(&self) -> u16 { 45 }
+	fn cooldown(&self) -> u16 {
+		45
+	}
 }
 
 impl AsAABB for MagicMissile {
@@ -103,11 +104,19 @@ impl AsAABB for MagicMissile {
 }
 
 impl Drawable for MagicMissile {
-	fn pos(&self) -> Vec2 { self.pos }
+	fn pos(&self) -> Vec2 {
+		self.pos
+	}
 
-	fn size(&self) -> Vec2 { SIZE }
+	fn size(&self) -> Vec2 {
+		SIZE
+	}
 
-	fn rotation(&self) -> f32 { self.angle }
+	fn rotation(&self) -> f32 {
+		self.angle
+	}
 
-	fn texture(&self) -> Option<Texture2D> { Some(self.texture) }
+	fn texture(&self) -> Option<Texture2D> {
+		Some(self.texture)
+	}
 }
