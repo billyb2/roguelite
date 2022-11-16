@@ -155,8 +155,8 @@ pub enum DoorInteraction {
 }
 
 pub fn interact_with_door<A: AsAABB>(
-	entity: &mut A, door_interaction: DoorInteraction, floor: &mut Floor,
-	textures: &HashMap<String, Texture2D>,
+	entity: &A, players: &[Player], monsters: &[Box<dyn Monster>],
+	door_interaction: DoorInteraction, floor: &mut Floor, textures: &HashMap<String, Texture2D>,
 ) {
 	// First, see if the player is in contact with a door
 	let entity_tile_pos = pos_to_tile(entity);
@@ -168,12 +168,20 @@ pub fn interact_with_door<A: AsAABB>(
 		.filter(|door| {
 			let tile_distance = (door.tile_pos() - entity_tile_pos).abs();
 
+			let entity_in_door = monsters
+				.iter()
+				.map(|m| pos_to_tile(&m.as_aabb()))
+				.chain(players.iter().map(|p| pos_to_tile(p)))
+				.any(|pos| pos == door.tile_pos());
+
 			// You can't open or close doors that you're inside of
-			tile_distance.cmple(IVec2::ONE).all() && !door.tile_pos().eq(&entity_tile_pos)
+			tile_distance.cmple(IVec2::ONE).all()
+				&& !door.tile_pos().eq(&entity_tile_pos)
+				&& !entity_in_door
 		})
 		.reduce(|door_obj, door2_obj| {
 			let door = &door_obj.door().unwrap();
-			let door2 = &door_obj.door().unwrap();
+			let door2 = &door2_obj.door().unwrap();
 
 			// First, depending on the action the player is taking, we can pretty easily decide of the player wants to open or close the door
 			let door_will_be_affected = match door_interaction {
@@ -187,10 +195,10 @@ pub fn interact_with_door<A: AsAABB>(
 			};
 
 			if door_will_be_affected && door2_will_be_affected {
-				let door_distance = (door.pos() * IVec2::splat(TILE_SIZE as i32))
+				let door_distance = (door_obj.tile_pos() * IVec2::splat(TILE_SIZE as i32))
 					.as_vec2()
 					.distance_squared(entity.center());
-				let door2_distance = (door.pos() * IVec2::splat(TILE_SIZE as i32))
+				let door2_distance = (door2_obj.tile_pos() * IVec2::splat(TILE_SIZE as i32))
 					.as_vec2()
 					.distance_squared(entity.center());
 

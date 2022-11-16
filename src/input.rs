@@ -9,7 +9,7 @@ use crate::player::{
 };
 use macroquad::prelude::*;
 
-pub fn keyboard_input(
+pub fn movement_input(
 	player: &mut Player, monsters: &mut [Box<dyn Monster>], textures: &HashMap<String, Texture2D>,
 	floor: &mut Floor,
 ) {
@@ -36,14 +36,6 @@ pub fn keyboard_input(
 		x_movement += 1.0;
 	}
 
-	if is_key_pressed(KeyCode::O) {
-		interact_with_door(player, DoorInteraction::Opening, floor, textures);
-	}
-
-	if is_key_pressed(KeyCode::C) {
-		interact_with_door(player, DoorInteraction::Closing, floor, textures);
-	}
-
 	let mouse_pos = mouse_position_local();
 	player.angle = get_angle(mouse_pos, Vec2::ZERO);
 
@@ -66,5 +58,32 @@ pub fn keyboard_input(
 	if x_movement != 0.0 || y_movement != 0.0 {
 		let angle = y_movement.atan2(x_movement);
 		move_player(player, angle, None, floor)
+	}
+}
+
+pub fn door_interaction_input(
+	player: &Player, players: &[Player], monsters: &[Box<dyn Monster>], floor: &mut Floor,
+	textures: &HashMap<String, Texture2D>,
+) {
+	if is_key_pressed(KeyCode::O) {
+		interact_with_door(
+			player,
+			players,
+			monsters,
+			DoorInteraction::Opening,
+			floor,
+			textures,
+		);
+	}
+
+	if is_key_pressed(KeyCode::C) {
+		interact_with_door(
+			player,
+			players,
+			monsters,
+			DoorInteraction::Closing,
+			floor,
+			textures,
+		);
 	}
 }

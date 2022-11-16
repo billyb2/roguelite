@@ -160,11 +160,19 @@ async fn main() {
 		}
 
 		// Logic
-		keyboard_input(
+		movement_input(
 			&mut players[0],
 			&mut monsters,
 			&textures,
 			map.current_floor_mut(),
+		);
+
+		door_interaction_input(
+			&players[0],
+			&players,
+			&monsters,
+			map.current_floor_mut(),
+			&textures,
 		);
 
 		trigger_traps(&mut players, map.current_floor_mut());
