@@ -1,8 +1,12 @@
 use std::collections::HashMap;
+use std::fmt::Display;
 
 use crate::attacks::*;
 use crate::draw::Drawable;
-use crate::map::{distance_squared, pos_to_tile, Floor, TILE_SIZE};
+use crate::enchantments::{Enchantable, Enchantment};
+use crate::items::ItemType::*;
+use crate::items::{attack_with_item, ItemInfo};
+use crate::map::{pos_to_tile, Floor, TILE_SIZE};
 use crate::math::{AsAABB, AxisAlignedBoundingBox};
 use crate::monsters::Monster;
 use macroquad::prelude::*;
@@ -15,31 +19,126 @@ pub enum PlayerClass {
 	Wizard,
 }
 
+/// Info regarding points such as HP or MP
+#[derive(Debug)]
+struct PointInfo {
+	/// Currently number of points
+	points: u16,
+	/// The number of frames until your points go up by 1, lower is better
+	regen_rate: u16,
+	max_points: u16,
+	time_til_regen: u16,
+}
+
+impl Default for PointInfo {
+	fn default() -> Self {
+		Self {
+			points: 0,
+			regen_rate: 0,
+			max_points: 0,
+			time_til_regen: 0,
+		}
+	}
+}
+
+#[derive(Copy, Clone)]
+pub enum Spell {
+	BlindingLight,
+	MagicMissile,
+}
+
+impl Display for Spell {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.write_str(match self {
+			Spell::BlindingLight => "Blinding Light",
+			Spell::MagicMissile => "Magic Missile",
+		})
+	}
+}
+
 pub struct Player {
-	class: PlayerClass,
 	pub angle: f32,
 	pub pos: Vec2,
 	speed: f32,
-	health: f32,
+	hp: PointInfo,
+	mp: PointInfo,
 	invincibility_frames: u16,
+	pub primary_item: ItemInfo,
 	pub primary_cooldown: u16,
 	pub secondary_cooldown: u16,
-	pub attacks: Vec<Box<dyn Attack>>,
+
+	spells: Vec<Spell>,
+
+	pub changing_spell: bool,
+	pub time_til_change_spell: u8,
 }
 
 impl Player {
 	pub fn new(class: PlayerClass, pos: Vec2) -> Self {
+		let primary_item = match class {
+			PlayerClass::Warrior => ItemInfo::new(ShortSword),
+			PlayerClass::Wizard => ItemInfo::new(WizardGlove),
+		};
+
+		let hp = match class {
+			PlayerClass::Warrior => PointInfo {
+				points: 30,
+				max_points: 30,
+				// 45 seconds
+				regen_rate: 45 * 60,
+				..Default::default()
+			},
+			PlayerClass::Wizard => PointInfo {
+				points: 20,
+				max_points: 20,
+				// 45 seconds
+				regen_rate: 45 * 60,
+				..Default::default()
+			},
+		};
+
+		let mp = match class {
+			PlayerClass::Wizard => PointInfo {
+				points: 10,
+				max_points: 10,
+				// 8 seconds
+				regen_rate: 8 * 60,
+				..Default::default()
+			},
+			PlayerClass::Warrior => PointInfo {
+				points: 7,
+				max_points: 7,
+				// 10 seconds
+				regen_rate: 10 * 60,
+				..Default::default()
+			},
+		};
+
+		let spells = match class {
+			PlayerClass::Warrior => Vec::new(),
+			PlayerClass::Wizard => vec![Spell::MagicMissile, Spell::BlindingLight],
+		};
+
 		Self {
-			class,
 			pos,
 			angle: 0.0,
 			speed: 2.2,
 			primary_cooldown: 0,
 			secondary_cooldown: 0,
-			health: 100.0,
+			hp,
+			mp,
 			invincibility_frames: 0,
-			attacks: Vec::with_capacity(2),
+			primary_item,
+			spells,
+			changing_spell: false,
+			time_til_change_spell: 0,
 		}
+	}
+
+	/// Replace the first and last items in the spells Vec
+	pub fn cycle_spells(&mut self) {
+		let spells_len = self.spells.len();
+		self.spells.swap(0, spells_len - 1);
 	}
 
 	#[inline]
@@ -48,43 +147,18 @@ impl Player {
 	}
 
 	#[inline]
-	pub fn health(&self) -> f32 {
-		self.health
+	pub fn hp(&self) -> u16 {
+		self.hp.points
 	}
 
 	#[inline]
-	pub fn class(&self) -> PlayerClass {
-		self.class
-	}
-}
-
-impl AsAABB for Player {
-	fn as_aabb(&self) -> AxisAlignedBoundingBox {
-		AxisAlignedBoundingBox {
-			pos: self.pos,
-			size: Vec2::splat(PLAYER_SIZE),
-		}
-	}
-}
-
-impl Drawable for Player {
-	fn pos(&self) -> Vec2 {
-		self.pos
+	pub fn mp(&self) -> u16 {
+		self.mp.points
 	}
 
-	fn size(&self) -> Vec2 {
-		Vec2::splat(PLAYER_SIZE)
-	}
-
-	fn draw(&self) {
-		draw_rectangle(self.pos.x, self.pos.y, PLAYER_SIZE, PLAYER_SIZE, RED);
-		draw_text(
-			&self.health.to_string(),
-			self.pos.x,
-			self.pos.y - PLAYER_SIZE,
-			12.0,
-			WHITE,
-		);
+	#[inline]
+	pub fn spells(&self) -> &[Spell] {
+		&self.spells
 	}
 }
 
@@ -97,17 +171,12 @@ pub fn move_player(player: &mut Player, angle: f32, speed: Option<Vec2>, floor: 
 	}
 }
 
-pub fn damage_player(player: &mut Player, damage: f32, damage_direction: f32, floor: &Floor) {
+pub fn damage_player(player: &mut Player, damage: u16, damage_direction: f32, floor: &Floor) {
 	if player.invincibility_frames > 0 {
 		return;
 	}
 
-	let new_health = player.health - damage;
-
-	player.health = match new_health > 0.0 {
-		true => new_health,
-		false => 0.0,
-	};
+	player.hp.points = player.hp.points.saturating_sub(damage);
 
 	// Have the player "flinch" away from damage
 	move_player(
@@ -121,31 +190,67 @@ pub fn damage_player(player: &mut Player, damage: f32, damage_direction: f32, fl
 }
 
 pub fn update_cooldowns(players: &mut [Player]) {
+	let regen = |point_info: &mut PointInfo| {
+		if point_info.points < point_info.max_points {
+			point_info.time_til_regen = point_info.time_til_regen.saturating_sub(1);
+
+			if point_info.time_til_regen == 0 {
+				point_info.points += 1;
+
+				point_info.time_til_regen = point_info.regen_rate;
+				return;
+			}
+		}
+	};
+
 	players.iter_mut().for_each(|p| {
 		p.primary_cooldown = p.primary_cooldown.saturating_sub(1);
 		p.secondary_cooldown = p.secondary_cooldown.saturating_sub(1);
 
 		p.invincibility_frames = p.invincibility_frames.saturating_sub(1);
+
+		p.time_til_change_spell = p.time_til_change_spell.saturating_sub(1);
+
+		if p.changing_spell {
+			if p.time_til_change_spell == 0 {
+				p.cycle_spells();
+				p.changing_spell = false;
+			}
+		}
+
+		regen(&mut p.hp);
+		regen(&mut p.mp);
 	});
 }
 
-pub fn primary_attack(
-	player: &mut Player, textures: &HashMap<String, Texture2D>, monsters: &mut [Box<dyn Monster>],
-	floor: &Floor,
-) -> Box<dyn Attack> {
-	match player.class {
-		PlayerClass::Warrior => Slash::new(player, player.angle, textures, floor, true),
-		PlayerClass::Wizard => MagicMissile::new(player, player.angle, textures, floor, true),
-	}
-}
+pub fn player_attack(
+	player: &mut Player, textures: &HashMap<String, Texture2D>, attacks: &mut Vec<Box<dyn Attack>>,
+	floor: &Floor, is_primary: bool,
+) {
+	let item = match is_primary {
+		true => player.primary_item,
+		false => player.primary_item,
+	};
 
-pub fn secondary_attack(
-	player: &mut Player, textures: &HashMap<String, Texture2D>, monsters: &mut [Box<dyn Monster>],
-	floor: &Floor,
-) -> Box<dyn Attack> {
-	match player.class {
-		PlayerClass::Warrior => Stab::new(player, player.angle, textures, floor, false),
-		PlayerClass::Wizard => BlindingLight::new(player, player.angle, textures, floor, false),
+	if let Some(attack) = attack_with_item(item, player, textures, floor, is_primary) {
+		let cooldown = match is_primary {
+			true => &mut player.primary_cooldown,
+			false => &mut player.secondary_cooldown,
+		};
+
+		if *cooldown != 0 {
+			return;
+		}
+
+		if player.mp.points >= attack.mana_cost() {
+			player.mp.points -= attack.mana_cost();
+		} else {
+			return;
+		}
+
+		*cooldown = attack.cooldown();
+
+		attacks.push(attack);
 	}
 }
 
@@ -206,12 +311,10 @@ pub fn interact_with_door<A: AsAABB>(
 					true => door_obj,
 					false => door2_obj,
 				}
+			} else if door_will_be_affected {
+				door_obj
 			} else {
-				if door_will_be_affected {
-					door_obj
-				} else {
-					door2_obj
-				}
+				door2_obj
 			}
 		});
 
@@ -220,5 +323,45 @@ pub fn interact_with_door<A: AsAABB>(
 			DoorInteraction::Opening => door.open_door(textures),
 			DoorInteraction::Closing => door.close_door(textures),
 		};
+	}
+}
+
+impl AsAABB for Player {
+	fn as_aabb(&self) -> AxisAlignedBoundingBox {
+		AxisAlignedBoundingBox {
+			pos: self.pos,
+			size: Vec2::splat(PLAYER_SIZE),
+		}
+	}
+}
+
+impl Drawable for Player {
+	fn pos(&self) -> Vec2 {
+		self.pos
+	}
+
+	fn size(&self) -> Vec2 {
+		Vec2::splat(PLAYER_SIZE)
+	}
+
+	fn draw(&self) {
+		draw_rectangle(self.pos.x, self.pos.y, PLAYER_SIZE, PLAYER_SIZE, RED);
+		draw_text(
+			&self.hp.points.to_string(),
+			self.pos.x,
+			self.pos.y - PLAYER_SIZE,
+			12.0,
+			WHITE,
+		);
+	}
+}
+
+impl Enchantable for Player {
+	fn apply_enchantment(&mut self, enchantment: Enchantment) {
+		todo!()
+	}
+
+	fn update_enchantments(&mut self) {
+		todo!()
 	}
 }

@@ -1,6 +1,6 @@
 use macroquad::prelude::*;
 
-use crate::MAX_VIEW_OF_PLAYER;
+
 
 pub trait Drawable {
 	fn size(&self) -> Vec2;

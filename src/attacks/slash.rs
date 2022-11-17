@@ -20,28 +20,23 @@ pub struct Slash {
 
 impl Attack for Slash {
 	fn new(
-		player: &mut Player, angle: f32, textures: &HashMap<String, Texture2D>, floor: &Floor,
-		is_primary: bool,
+		player: &Player, angle: f32, textures: &HashMap<String, Texture2D>, floor: &Floor,
+		_is_primary: bool,
 	) -> Box<Self> {
-		let cooldown = match is_primary {
-			true => player.primary_cooldown,
-			false => player.secondary_cooldown,
-		};
-
-		if cooldown == 0 {
-			let change = Vec2::new(angle.cos(), angle.sin()) * PLAYER_SIZE;
-
-			if !floor.collision(player, change) {
-				player.pos += change;
-			}
-		}
-
 		Box::new(Self {
 			pos: player.pos(),
 			angle,
 			texture: *textures.get("slash.webp").unwrap(),
 			time: 0,
 		})
+	}
+
+	fn side_effects(&self, player: &mut Player, floor: &Floor) {
+		let change = Vec2::new(self.angle.cos(), self.angle.sin()) * PLAYER_SIZE;
+
+		if !floor.collision(player, change) {
+			player.pos += change;
+		}
 	}
 
 	fn update(&mut self, monsters: &mut [Box<dyn Monster>], floor: &Floor) -> bool {
@@ -63,7 +58,7 @@ impl Attack for Slash {
 			.iter_mut()
 			.find(|m| aabb_collision(self, &m.as_aabb(), Vec2::ZERO))
 		{
-			const DAMAGE: f32 = 10.0;
+			const DAMAGE: u16 = 10;
 
 			let damage_direction = get_angle(monster.pos(), self.pos);
 			monster.take_damage(DAMAGE, damage_direction, floor);
@@ -76,6 +71,10 @@ impl Attack for Slash {
 
 	fn cooldown(&self) -> u16 {
 		30
+	}
+
+	fn mana_cost(&self) -> u16 {
+		0
 	}
 }
 

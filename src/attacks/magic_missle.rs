@@ -16,12 +16,12 @@ pub struct MagicMissile {
 	angle: f32,
 	texture: Texture2D,
 	time: u16,
-	bounces: u8,
+	bounces: u16,
 }
 
 impl Attack for MagicMissile {
 	fn new(
-		player: &mut Player, angle: f32, textures: &HashMap<String, Texture2D>, floor: &Floor,
+		player: &Player, angle: f32, textures: &HashMap<String, Texture2D>, floor: &Floor,
 		is_primary: bool,
 	) -> Box<Self> {
 		// "Knocback" the player a bit
@@ -30,13 +30,7 @@ impl Attack for MagicMissile {
 			false => player.secondary_cooldown,
 		};
 
-		if cooldown == 0 {
-			let change = -Vec2::new(angle.cos(), angle.sin()) * 1.5;
-
-			if !floor.collision(player, change) {
-				player.pos += change;
-			}
-		}
+		if cooldown == 0 {}
 
 		Box::new(Self {
 			pos: player.pos(),
@@ -45,6 +39,14 @@ impl Attack for MagicMissile {
 			time: 0,
 			bounces: 0,
 		})
+	}
+
+	fn side_effects(&self, player: &mut Player, floor: &Floor) {
+		let change = -Vec2::new(self.angle.cos(), self.angle.sin()) * 1.5;
+
+		if !floor.collision(player, change) {
+			player.pos += change;
+		}
 	}
 
 	fn update(&mut self, monsters: &mut [Box<dyn Monster>], floor: &Floor) -> bool {
@@ -77,7 +79,7 @@ impl Attack for MagicMissile {
 		{
 			const BASE_DAMAGE: u16 = 4;
 			// The damage increases the more the projectile bounces
-			let damage = BASE_DAMAGE.pow(1 + self.bounces as u32) as f32;
+			let damage = BASE_DAMAGE.pow((1 + self.bounces).into());
 
 			let damage_direction = get_angle(monster.pos(), self.pos);
 			monster.take_damage(damage, damage_direction, floor);
@@ -91,6 +93,10 @@ impl Attack for MagicMissile {
 
 	fn cooldown(&self) -> u16 {
 		45
+	}
+
+	fn mana_cost(&self) -> u16 {
+		3
 	}
 }
 

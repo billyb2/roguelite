@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::draw::Drawable;
 use crate::enchantments::{Enchantment, EnchantmentKind};
 use crate::map::Floor;
-use crate::math::{aabb_collision, get_angle, AsAABB, AxisAlignedBoundingBox};
+use crate::math::{aabb_collision, AsAABB, AxisAlignedBoundingBox};
 use crate::monsters::Monster;
 use crate::player::Player;
 use macroquad::prelude::*;
@@ -21,8 +21,8 @@ pub struct BlindingLight {
 
 impl Attack for BlindingLight {
 	fn new(
-		player: &mut Player, angle: f32, textures: &HashMap<String, Texture2D>, floor: &Floor,
-		is_primary: bool,
+		player: &Player, angle: f32, textures: &HashMap<String, Texture2D>, _floor: &Floor,
+		_is_primary: bool,
 	) -> Box<Self> {
 		Box::new(Self {
 			pos: player.pos() + (Vec2::new(angle.cos(), angle.sin()) * SIZE),
@@ -53,7 +53,15 @@ impl Attack for BlindingLight {
 		false
 	}
 
-	fn cooldown(&self) -> u16 { 60 * 8 }
+	fn cooldown(&self) -> u16 {
+		60
+	}
+
+	fn mana_cost(&self) -> u16 {
+		7
+	}
+
+	fn side_effects(&self, player: &mut Player, floor: &Floor) {}
 }
 
 impl AsAABB for BlindingLight {
@@ -66,11 +74,19 @@ impl AsAABB for BlindingLight {
 }
 
 impl Drawable for BlindingLight {
-	fn pos(&self) -> Vec2 { self.pos }
+	fn pos(&self) -> Vec2 {
+		self.pos
+	}
 
-	fn size(&self) -> Vec2 { SIZE }
+	fn size(&self) -> Vec2 {
+		SIZE
+	}
 
-	fn rotation(&self) -> f32 { self.angle }
+	fn rotation(&self) -> f32 {
+		self.angle
+	}
 
-	fn texture(&self) -> Option<Texture2D> { Some(self.texture) }
+	fn texture(&self) -> Option<Texture2D> {
+		Some(self.texture)
+	}
 }

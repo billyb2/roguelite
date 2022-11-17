@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::draw::Drawable;
-use crate::enchantments::{Enchantment, EnchantmentKind};
+use crate::enchantments::{Enchantable, Enchantment, EnchantmentKind};
 use crate::map::{pos_to_tile, Floor, Object, TILE_SIZE};
 use crate::math::{aabb_collision, get_angle, AsAABB, AxisAlignedBoundingBox};
 use crate::monsters::Monster;
@@ -24,20 +24,11 @@ enum Target {
 	PlayerIndex(usize),
 }
 
-impl Target {
-	fn unwrap_pos(self) -> Vec2 {
-		match self {
-			Self::Pos(v) => v,
-			_ => panic!(),
-		}
-	}
-}
-
 const SIZE: f32 = 18.0;
-const MAX_HEALTH: f32 = 35.0;
+const MAX_HEALTH: u16 = 35;
 
 pub struct SmallRat {
-	health: f32,
+	health: u16,
 	pos: Vec2,
 	texture: Texture2D,
 	attack_mode: AttackMode,
@@ -76,9 +67,7 @@ impl Monster for SmallRat {
 				rand::gen_range(room_top_left.y + 1, room_bottom_right.y - 1),
 			);
 
-			let rand_pos = (rand_tile * IVec2::splat(TILE_SIZE as i32)).as_vec2();
-
-			rand_pos
+			(rand_tile * IVec2::splat(TILE_SIZE as i32)).as_vec2()
 		};
 
 		Self {
@@ -108,7 +97,7 @@ impl Monster for SmallRat {
 	fn damage_players(&mut self, players: &mut [Player], floor: &Floor) {
 		players.iter_mut().for_each(|p| {
 			if aabb_collision(p, self, Vec2::ZERO) {
-				const DAMAGE: f32 = 20.0;
+				const DAMAGE: u16 = 10;
 				let damage_direction = get_angle(p.pos(), self.pos);
 
 				damage_player(p, DAMAGE, damage_direction, floor);
@@ -116,12 +105,8 @@ impl Monster for SmallRat {
 		});
 	}
 
-	fn take_damage(&mut self, damage: f32, damage_direction: f32, floor: &Floor) {
-		self.health -= damage;
-
-		if self.health < 0.0 {
-			self.health = 0.0;
-		}
+	fn take_damage(&mut self, damage: u16, damage_direction: f32, floor: &Floor) {
+		self.health = self.health.saturating_sub(damage);
 
 		if let Some(effect) = self.enchantments.get_mut(&EnchantmentKind::Blinded) {
 			// Reduce the amount of time left on blindness whenever the rat takes damage
@@ -131,59 +116,20 @@ impl Monster for SmallRat {
 		// "Flinch" away from damage
 		let change = Vec2::new(damage_direction.cos(), damage_direction.sin())
 			* self.size()
-			* (damage / (MAX_HEALTH / 2.0));
+			* Vec2::splat((damage / (MAX_HEALTH / 2)) as f32);
 
 		if !floor.collision(self, change) {
 			self.pos += change;
 		}
 	}
 
-	fn apply_enchantment(&mut self, enchantment: Enchantment) {
-		match enchantment.kind {
-			EnchantmentKind::Blinded => {
-				self.current_target = None;
-				self.current_path = None;
-				self.time_til_move = 50;
-			},
-		};
-
-		self.enchantments.insert(
-			enchantment.kind,
-			Effect {
-				frames_left: 240,
-				enchantment,
-			},
-		);
-	}
-
-	fn update_enchantments(&mut self) {
-		self.enchantments.retain(|e_kind, effect| {
-			effect.frames_left = effect.frames_left.saturating_sub(1);
-			let removing_enchantment = effect.frames_left == 0;
-
-			if removing_enchantment {
-				match e_kind {
-					EnchantmentKind::Blinded => {
-						self.attack_mode = AttackMode::Passive;
-						self.time_til_move = 10;
-						self.time_spent_moving = 0;
-						self.current_target = None;
-						self.current_path = None;
-					},
-				}
-			}
-
-			!removing_enchantment
-		});
-	}
-
 	fn living(&self) -> bool {
-		self.health > 0.0
+		self.health > 0
 	}
 }
 
 fn player_in_aggro_range((_, player): &(usize, &Player), visible_objects: &[&Object]) -> bool {
-	if player.health() <= 0.0 {
+	if player.hp() == 0 {
 		return false;
 	}
 
@@ -343,7 +289,7 @@ fn attack_mode(my_monster: &mut SmallRat, players: &[Player], floor: &Floor) {
 			my_monster.current_path = None;
 		}
 		// If the player dies, go back to passive mode
-		if target_player.health() == 0.0 {
+		if target_player.hp() == 0 {
 			my_monster.attack_mode = AttackMode::Passive;
 			my_monster.current_target = None;
 		}
@@ -381,6 +327,47 @@ fn move_blindly(my_monster: &mut SmallRat, floor: &Floor) {
 			direction * Vec2::splat((TILE_SIZE * 2) as f32)
 				+ my_monster.pos + Vec2::splat(SIZE * 0.25),
 		));
+	}
+}
+
+impl Enchantable for SmallRat {
+	fn apply_enchantment(&mut self, enchantment: Enchantment) {
+		match enchantment.kind {
+			EnchantmentKind::Blinded => {
+				self.current_target = None;
+				self.current_path = None;
+				self.time_til_move = 50;
+			},
+		};
+
+		self.enchantments.insert(
+			enchantment.kind,
+			Effect {
+				frames_left: 240,
+				enchantment,
+			},
+		);
+	}
+
+	fn update_enchantments(&mut self) {
+		self.enchantments.retain(|e_kind, effect| {
+			effect.frames_left = effect.frames_left.saturating_sub(1);
+			let removing_enchantment = effect.frames_left == 0;
+
+			if removing_enchantment {
+				match e_kind {
+					EnchantmentKind::Blinded => {
+						self.attack_mode = AttackMode::Passive;
+						self.time_til_move = 10;
+						self.time_spent_moving = 0;
+						self.current_target = None;
+						self.current_path = None;
+					},
+				}
+			}
+
+			!removing_enchantment
+		});
 	}
 }
 

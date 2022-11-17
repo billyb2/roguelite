@@ -1,7 +1,6 @@
 mod blinding_light;
 mod magic_missle;
 mod slash;
-mod stab;
 
 use std::collections::HashMap;
 
@@ -13,46 +12,27 @@ use crate::player::Player;
 pub use blinding_light::*;
 pub use magic_missle::*;
 pub use slash::*;
-pub use stab::*;
 
 use macroquad::prelude::*;
 
 pub trait Attack: Drawable + Send + Sync {
+	/// Just gives some information about the attack
 	fn new(
-		player: &mut Player, angle: f32, textures: &HashMap<String, Texture2D>, floor: &Floor,
+		player: &Player, angle: f32, textures: &HashMap<String, Texture2D>, floor: &Floor,
 		is_primary: bool,
 	) -> Box<Self>
 	where
 		Self: Sized;
+	/// If the attack has any side effects on the user, do them here
+	fn side_effects(&self, player: &mut Player, floor: &Floor);
+	fn mana_cost(&self) -> u16;
 	// Returns whether or not the attack should be destroyed
 	fn update(&mut self, monsters: &mut [Box<dyn Monster>], floor: &Floor) -> bool;
 	fn cooldown(&self) -> u16;
 }
 
-pub fn attack(attack: Box<dyn Attack>, player: &mut Player, primary_attack: bool) {
-	let cooldown = match primary_attack {
-		true => &mut player.primary_cooldown,
-		false => &mut player.secondary_cooldown,
-	};
-
-	if *cooldown != 0 {
-		return;
-	}
-
-	*cooldown = attack.cooldown();
-	player.attacks.push(attack);
-}
-
-pub fn update_attacks(players: &mut [Player], monsters: &mut [Box<dyn Monster>], floor: &Floor) {
-	players.iter_mut().for_each(|p| {
-		let mut i = 0;
-
-		while i < p.attacks.len() {
-			if p.attacks[i].update(monsters, floor) {
-				p.attacks.remove(i);
-			} else {
-				i += 1;
-			}
-		}
-	});
+pub fn update_attacks(
+	monsters: &mut [Box<dyn Monster>], floor: &Floor, attacks: &mut Vec<Box<dyn Attack>>,
+) {
+	attacks.retain_mut(|attack| !attack.update(monsters, floor));
 }

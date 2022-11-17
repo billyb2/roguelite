@@ -160,11 +160,7 @@ impl Room {
 		self.generate_walls()
 			.into_iter()
 			.map(|w_pos| {
-				let door = self
-					.doors
-					.iter()
-					.find(|d| d.pos == w_pos)
-					.map(|d| d.clone());
+				let door = self.doors.iter().find(|d| d.pos == w_pos).copied();
 
 				let texture = *textures
 					.get(match door.is_some() {
@@ -249,10 +245,6 @@ impl Floor {
 
 	pub fn rooms(&self) -> &Vec<Room> {
 		&self.rooms
-	}
-
-	pub fn background_objects(&self) -> impl Iterator<Item = &Object> {
-		self.objects.iter().filter(|obj| !obj.is_collidable())
 	}
 
 	// Same as collision, but returns the actual Object collided w.
@@ -472,7 +464,7 @@ impl Floor {
 		});
 
 		// Only keep rooms that have a door
-		rooms.retain(|room| room.doors.len() > 0);
+		rooms.retain(|room| !room.doors.is_empty());
 
 		// Remove all "hallway" positions inside of a room
 		hallways.retain(|h| !rooms.iter().any(|r| r.inside_room(*h)));
@@ -525,7 +517,7 @@ impl Floor {
 
 		let room_walls = rooms
 			.iter()
-			.flat_map(|room: &Room| room.generate_wall_objects(&textures));
+			.flat_map(|room: &Room| room.generate_wall_objects(textures));
 
 		let rooms_ref = &rooms;
 		let hallways_ref = &hallways;
@@ -636,7 +628,7 @@ impl Floor {
 	pub fn find_path(
 		&self, pos: &dyn AsAABB, goal: &dyn AsAABB, only_visible: bool,
 	) -> Option<Vec<Vec2>> {
-		find_path(pos, goal, &self, only_visible)
+		find_path(pos, goal, self, only_visible)
 	}
 
 	pub fn should_descend(&self, players: &[Player], _monsters: &[Box<dyn Monster>]) -> bool {
@@ -811,7 +803,7 @@ fn find_viable_neighbors(
 pub fn find_path(
 	start: &dyn AsAABB, goal: &dyn AsAABB, floor: &Floor, only_visible: bool,
 ) -> Option<Vec<Vec2>> {
-	let aabb = start.as_aabb();
+	let _aabb = start.as_aabb();
 
 	let start_tile_pos = pos_to_tile(start);
 	let goal_tile_pos = pos_to_tile(goal);
@@ -860,8 +852,7 @@ pub fn distance_squared(pos1: IVec2, pos2: IVec2) -> i32 {
 pub fn pos_to_tile(obj: &dyn AsAABB) -> IVec2 {
 	let center = obj.center();
 
-	let tile_pos = (center / Vec2::splat(TILE_SIZE as f32)).round().as_ivec2();
-	tile_pos
+	(center / Vec2::splat(TILE_SIZE as f32)).round().as_ivec2()
 }
 
 pub fn trigger_traps(players: &mut [Player], floor: &mut Floor) {

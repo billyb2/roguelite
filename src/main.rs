@@ -2,6 +2,7 @@ mod attacks;
 mod draw;
 mod enchantments;
 mod input;
+mod items;
 mod map;
 mod math;
 mod monsters;
@@ -27,7 +28,7 @@ use rayon::prelude::*;
 
 pub const MAX_VIEW_OF_PLAYER: f32 = 200.0;
 
-const DEFAULT_FRAGMENT_SHADER: &'static str = "#version 100
+const DEFAULT_FRAGMENT_SHADER: &str = "#version 100
 precision lowp float;
 varying vec2 uv;
 uniform sampler2D Texture;
@@ -45,7 +46,7 @@ void main() {
 }
 ";
 
-const DEFAULT_VERTEX_SHADER: &'static str = "#version 100
+const DEFAULT_VERTEX_SHADER: &str = "#version 100
 precision lowp float;
 attribute vec3 position;
 attribute vec2 texcoord;
@@ -69,13 +70,13 @@ async fn main() {
 	io::stdout().flush().unwrap();
 
 	let mut class = String::new();
-	// io::stdin().read_line(&mut class).unwrap();
+	io::stdin().read_line(&mut class).unwrap();
 
 	class = class.to_lowercase();
 	class.pop();
 
 	let class = match class.is_empty() {
-		true => PlayerClass::Wizard,
+		true => PlayerClass::Warrior,
 		false => match class.as_str() {
 			"warrior" => PlayerClass::Warrior,
 			"wizard" | "." => PlayerClass::Wizard,
@@ -100,6 +101,7 @@ async fn main() {
 		.collect();
 
 	let mut monsters: Vec<Box<dyn Monster>> = Vec::new();
+	let mut attacks = Vec::new();
 
 	let mut map = Map::new(&textures, &mut monsters);
 	let mut players = vec![Player::new(class, map.current_floor().current_spawn())];
@@ -162,7 +164,7 @@ async fn main() {
 		// Logic
 		movement_input(
 			&mut players[0],
-			&mut monsters,
+			&mut attacks,
 			&textures,
 			map.current_floor_mut(),
 		);
@@ -177,7 +179,7 @@ async fn main() {
 
 		trigger_traps(&mut players, map.current_floor_mut());
 		update_cooldowns(&mut players);
-		update_attacks(&mut players, &mut monsters, map.current_floor());
+		update_attacks(&mut monsters, map.current_floor(), &mut attacks);
 		update_monsters(&mut monsters, &mut players, map.current_floor());
 
 		if map.current_floor().should_descend(&players, &monsters) {
@@ -201,7 +203,7 @@ async fn main() {
 
 		material.set_uniform("lowest_light_level", 1.0_f32);
 
-		visible_objects.iter().map(|obj| *obj).for_each(|o| {
+		visible_objects.iter().for_each(|o| {
 			o.draw();
 		});
 
@@ -245,16 +247,31 @@ async fn main() {
 
 		material.set_uniform("lowest_light_level", 1.0_f32);
 
-		players
-			.iter()
-			.flat_map(|p| p.attacks.iter())
-			.for_each(|a| a.draw());
+		attacks.iter().for_each(|a| a.draw());
 
 		gl_use_default_material();
 
 		players.iter().for_each(|p| p.draw());
 
 		root_ui().label(Vec2::ZERO, &fps.to_string());
+		root_ui().label(
+			Vec2::new(screen_width() - 100.0, 0.0),
+			&format!("HP: {}", players[0].hp()),
+		);
+		root_ui().label(
+			Vec2::new(screen_width() - 100.0, 10.0),
+			&format!("MP: {}", players[0].mp()),
+		);
+
+		if !players[0].spells().is_empty() {
+			root_ui().label(
+				Vec2::new(screen_width() - 150.0, 20.0),
+				&match players[0].changing_spell {
+					false => format!("Spell: {}", players[0].spells()[0]),
+					true => format!("Cycling Spell..."),
+				},
+			);
+		}
 
 		if SHOW_FRAMERATE && frames_till_update_framerate == 0 {
 			fps = (1.0 / frame_time).round();
