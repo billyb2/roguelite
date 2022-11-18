@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::mem::MaybeUninit;
-use std::slice;
 
 use macroquad::prelude::*;
 use macroquad::rand;
@@ -236,11 +235,6 @@ impl Floor {
 	pub fn get_object_from_pos(&self, pos: IVec2) -> Option<&Object> {
 		self.objects
 			.get((pos.x + pos.y * MAP_WIDTH_TILES as i32) as usize)
-	}
-
-	pub fn get_object_from_pos_mut(&mut self, pos: IVec2) -> Option<&mut Object> {
-		self.objects
-			.get_mut((pos.x + pos.y * MAP_WIDTH_TILES as i32) as usize)
 	}
 
 	pub fn rooms(&self) -> &Vec<Room> {
@@ -649,24 +643,31 @@ impl Floor {
 			.into_iter()
 			.map(|edge| points_on_line(center_tile, edge));
 
-		let mut visible_objects = Vec::with_capacity(rays.len() * size.unwrap_or(12) as usize);
+		let mut visible_object_indices =
+			Vec::with_capacity(rays.len() * size.unwrap_or(12) as usize);
 
 		for ray in rays {
 			'ray: for pos in ray.into_iter() {
-				if let Some(obj) = get_object_from_pos_mut(pos, unsafe {
-					// Evil borrow laundering
-					slice::from_raw_parts_mut(objects.as_mut_ptr(), objects.len())
-				}) {
-					obj.has_been_seen = true;
-					let obj = &*obj;
-					visible_objects.push(obj);
+				if let Some(index) = get_object_from_pos_mut(pos, &objects) {
+					visible_object_indices.push(index);
 
+					let obj = &objects[index];
 					if obj.is_collidable() {
 						break 'ray;
 					}
 				}
 			}
 		}
+
+		visible_object_indices
+			.iter()
+			.copied()
+			.for_each(|i| objects[i].has_been_seen = true);
+
+		let visible_objects = visible_object_indices
+			.into_iter()
+			.map(|i| &objects[i])
+			.collect();
 
 		visible_objects
 	}
@@ -884,8 +885,13 @@ pub fn trigger_traps(players: &mut [Player], floor: &mut Floor) {
 	});
 }
 
-fn get_object_from_pos_mut(pos: IVec2, obj_list: &mut [Object]) -> Option<&mut Object> {
-	obj_list.get_mut((pos.x + pos.y * MAP_WIDTH_TILES as i32) as usize)
+fn get_object_from_pos_mut(pos: IVec2, obj_list: &[Object]) -> Option<usize> {
+	let index = (pos.x + pos.y * MAP_WIDTH_TILES as i32) as usize;
+
+	match index < obj_list.len() {
+		true => Some(index),
+		false => None,
+	}
 }
 
 fn get_object_from_pos_list(pos: IVec2, obj_list: &[Object]) -> Option<&Object> {
