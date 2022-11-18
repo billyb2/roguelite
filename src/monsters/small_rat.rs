@@ -106,17 +106,17 @@ impl Monster for SmallRat {
 	}
 
 	fn take_damage(&mut self, damage: u16, damage_direction: f32, floor: &Floor) {
+		dbg!(damage);
 		self.health = self.health.saturating_sub(damage);
+		dbg!(self.health);
 
-		if let Some(effect) = self.enchantments.get_mut(&EnchantmentKind::Blinded) {
-			// Reduce the amount of time left on blindness whenever the rat takes damage
-			effect.frames_left /= 2;
-		}
+		self.enchantments.iter_mut().for_each(|enchantment| {
+			enchantment.1.frames_left /= 2;
+		});
 
-		// "Flinch" away from damage
 		let change = Vec2::new(damage_direction.cos(), damage_direction.sin())
-			* self.size()
-			* Vec2::splat((damage / (MAX_HEALTH / 2)) as f32);
+			* Vec2::splat(SIZE)
+			* Vec2::splat((damage as f32 / MAX_HEALTH as f32).clamp(0.0, 0.8));
 
 		if !floor.collision(self, change) {
 			self.pos += change;
