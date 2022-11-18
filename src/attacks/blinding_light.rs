@@ -46,7 +46,7 @@ impl Attack for BlindingLight {
 			.for_each(|monster| {
 				monster.apply_enchantment(Enchantment {
 					kind: EnchantmentKind::Blinded,
-					level: 0,
+					strength: 0,
 				});
 			});
 
@@ -58,7 +58,7 @@ impl Attack for BlindingLight {
 	}
 
 	fn mana_cost(&self) -> u16 {
-		7
+		3
 	}
 
 	fn side_effects(&self, player: &mut Player, floor: &Floor) {}

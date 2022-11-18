@@ -22,16 +22,8 @@ pub struct MagicMissile {
 impl Attack for MagicMissile {
 	fn new(
 		player: &Player, angle: f32, textures: &HashMap<String, Texture2D>, floor: &Floor,
-		is_primary: bool,
+		_is_primary: bool,
 	) -> Box<Self> {
-		// "Knocback" the player a bit
-		let cooldown = match is_primary {
-			true => player.primary_cooldown,
-			false => player.secondary_cooldown,
-		};
-
-		if cooldown == 0 {}
-
 		Box::new(Self {
 			pos: player.pos(),
 			angle,
@@ -42,6 +34,7 @@ impl Attack for MagicMissile {
 	}
 
 	fn side_effects(&self, player: &mut Player, floor: &Floor) {
+		// "Knocback" the player a bit
 		let change = -Vec2::new(self.angle.cos(), self.angle.sin()) * 1.5;
 
 		if !floor.collision(player, change) {
@@ -96,7 +89,7 @@ impl Attack for MagicMissile {
 	}
 
 	fn mana_cost(&self) -> u16 {
-		3
+		1
 	}
 }
 

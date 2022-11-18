@@ -62,8 +62,13 @@ pub struct Player {
 	speed: f32,
 	hp: PointInfo,
 	mp: PointInfo,
+	/// The ability to resist magical enchantments
+	willpower: u16,
 	invincibility_frames: u16,
-	pub primary_item: ItemInfo,
+
+	pub primary_item: Option<ItemInfo>,
+	pub secondary_item: Option<ItemInfo>,
+
 	pub primary_cooldown: u16,
 	pub secondary_cooldown: u16,
 
@@ -75,43 +80,48 @@ pub struct Player {
 
 impl Player {
 	pub fn new(class: PlayerClass, pos: Vec2) -> Self {
-		let primary_item = match class {
+		let primary_item = Some(match class {
 			PlayerClass::Warrior => ItemInfo::new(ShortSword),
 			PlayerClass::Wizard => ItemInfo::new(WizardGlove),
-		};
+		});
 
 		let hp = match class {
-			PlayerClass::Warrior => PointInfo {
-				points: 30,
-				max_points: 30,
-				// 45 seconds
-				regen_rate: 45 * 60,
-				..Default::default()
-			},
 			PlayerClass::Wizard => PointInfo {
 				points: 20,
 				max_points: 20,
-				// 45 seconds
-				regen_rate: 45 * 60,
+				// 15 seconds
+				regen_rate: 15 * 60,
+				..Default::default()
+			},
+			PlayerClass::Warrior => PointInfo {
+				points: 30,
+				max_points: 30,
+				// 15 seconds
+				regen_rate: 15 * 60,
 				..Default::default()
 			},
 		};
 
 		let mp = match class {
 			PlayerClass::Wizard => PointInfo {
-				points: 10,
-				max_points: 10,
+				points: 5,
+				max_points: 5,
 				// 8 seconds
 				regen_rate: 8 * 60,
 				..Default::default()
 			},
 			PlayerClass::Warrior => PointInfo {
-				points: 7,
-				max_points: 7,
+				points: 3,
+				max_points: 3,
 				// 10 seconds
 				regen_rate: 10 * 60,
 				..Default::default()
 			},
+		};
+
+		let willpower = match class {
+			PlayerClass::Wizard => 20,
+			PlayerClass::Warrior => 10,
 		};
 
 		let spells = match class {
@@ -127,8 +137,10 @@ impl Player {
 			secondary_cooldown: 0,
 			hp,
 			mp,
+			willpower,
 			invincibility_frames: 0,
 			primary_item,
+			secondary_item: None,
 			spells,
 			changing_spell: false,
 			time_til_change_spell: 0,
@@ -213,8 +225,10 @@ pub fn update_cooldowns(players: &mut [Player]) {
 
 		if p.changing_spell {
 			if p.time_til_change_spell == 0 {
-				p.cycle_spells();
-				p.changing_spell = false;
+				if !p.spells.is_empty() {
+					p.cycle_spells();
+					p.changing_spell = false;
+				}
 			}
 		}
 
@@ -229,28 +243,30 @@ pub fn player_attack(
 ) {
 	let item = match is_primary {
 		true => player.primary_item,
-		false => player.primary_item,
+		false => player.secondary_item,
 	};
 
-	if let Some(attack) = attack_with_item(item, player, textures, floor, is_primary) {
-		let cooldown = match is_primary {
-			true => &mut player.primary_cooldown,
-			false => &mut player.secondary_cooldown,
-		};
+	if let Some(item) = item {
+		if let Some(attack) = attack_with_item(item, player, textures, floor, is_primary) {
+			let cooldown = match is_primary {
+				true => &mut player.primary_cooldown,
+				false => &mut player.secondary_cooldown,
+			};
 
-		if *cooldown != 0 {
-			return;
+			if *cooldown != 0 {
+				return;
+			}
+
+			if player.mp.points >= attack.mana_cost() {
+				player.mp.points -= attack.mana_cost();
+			} else {
+				return;
+			}
+
+			*cooldown = attack.cooldown();
+
+			attacks.push(attack);
 		}
-
-		if player.mp.points >= attack.mana_cost() {
-			player.mp.points -= attack.mana_cost();
-		} else {
-			return;
-		}
-
-		*cooldown = attack.cooldown();
-
-		attacks.push(attack);
 	}
 }
 

@@ -48,5 +48,5 @@ pub fn update_monsters(
 	monsters.retain_mut(|m| {
 		m.damage_players(players, floor);
 		m.living()
-	})
+	});
 }

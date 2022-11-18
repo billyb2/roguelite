@@ -6,7 +6,7 @@ pub enum EnchantmentKind {
 #[derive(PartialEq, Eq, Hash)]
 pub struct Enchantment {
 	pub kind: EnchantmentKind,
-	pub level: u8,
+	pub strength: u16,
 }
 
 pub trait Enchantable {

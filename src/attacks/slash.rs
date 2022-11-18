@@ -9,7 +9,7 @@ use macroquad::prelude::*;
 
 use super::Attack;
 
-const SIZE: Vec2 = Vec2::new(15.0, 25.0);
+const SIZE: Vec2 = Vec2::new(10.0, 15.0);
 
 pub struct Slash {
 	pos: Vec2,
@@ -40,7 +40,7 @@ impl Attack for Slash {
 	}
 
 	fn update(&mut self, monsters: &mut [Box<dyn Monster>], floor: &Floor) -> bool {
-		let movement = Vec2::new(self.angle.cos(), self.angle.sin()) * 5.0;
+		let movement = Vec2::new(self.angle.cos(), self.angle.sin()) * 6.0;
 
 		if !floor.collision(self, movement) {
 			self.pos += movement;
@@ -54,17 +54,16 @@ impl Attack for Slash {
 		}
 
 		// Check to see if it's collided with a monster
-		if let Some(monster) = monsters
+		monsters
 			.iter_mut()
-			.find(|m| aabb_collision(self, &m.as_aabb(), Vec2::ZERO))
-		{
-			const DAMAGE: u16 = 10;
+			.filter(|m| aabb_collision(self, &m.as_aabb(), Vec2::ZERO))
+			.for_each(|monster| {
+				// Damage is low bc of hitting enemies multiple times
+				const DAMAGE: u16 = 5;
 
-			let damage_direction = get_angle(monster.pos(), self.pos);
-			monster.take_damage(DAMAGE, damage_direction, floor);
-
-			return true;
-		}
+				let damage_direction = get_angle(monster.pos(), self.pos);
+				monster.take_damage(DAMAGE, damage_direction, floor);
+			});
 
 		false
 	}
