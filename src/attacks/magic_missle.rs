@@ -1,9 +1,8 @@
-use std::collections::HashMap;
 
-use crate::draw::Drawable;
+
+use crate::draw::{Drawable, Textures};
 use crate::map::FloorInfo;
 use crate::math::{aabb_collision, get_angle, AsAABB, AxisAlignedBoundingBox};
-use crate::monsters::Monster;
 use crate::player::{DamageInfo, Player};
 use macroquad::prelude::*;
 
@@ -22,8 +21,7 @@ pub struct MagicMissile {
 
 impl Attack for MagicMissile {
 	fn new(
-		player: &Player, angle: f32, textures: &HashMap<String, Texture2D>, floor: &FloorInfo,
-		_is_primary: bool,
+		player: &Player, angle: f32, textures: &Textures, _floor: &FloorInfo, _is_primary: bool,
 	) -> Box<Self> {
 		Box::new(Self {
 			pos: player.pos(),

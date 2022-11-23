@@ -1,10 +1,9 @@
-use std::collections::HashMap;
 
-use crate::draw::Drawable;
+
+use crate::draw::{Drawable, Textures};
 use crate::enchantments::{Enchantment, EnchantmentKind};
 use crate::map::FloorInfo;
 use crate::math::{aabb_collision, AsAABB, AxisAlignedBoundingBox};
-use crate::monsters::Monster;
 use crate::player::Player;
 use macroquad::prelude::*;
 
@@ -21,8 +20,7 @@ pub struct BlindingLight {
 
 impl Attack for BlindingLight {
 	fn new(
-		player: &Player, angle: f32, textures: &HashMap<String, Texture2D>, _floor: &FloorInfo,
-		_is_primary: bool,
+		player: &Player, angle: f32, textures: &Textures, _floor: &FloorInfo, _is_primary: bool,
 	) -> Box<Self> {
 		Box::new(Self {
 			pos: player.pos() + (Vec2::new(angle.cos(), angle.sin()) * SIZE),
@@ -62,7 +60,7 @@ impl Attack for BlindingLight {
 		3
 	}
 
-	fn side_effects(&self, player: &mut Player, floor: &FloorInfo) {}
+	fn side_effects(&self, _player: &mut Player, _floor: &FloorInfo) {}
 }
 
 impl AsAABB for BlindingLight {

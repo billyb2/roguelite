@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+
 use std::mem::MaybeUninit;
 
 use macroquad::prelude::*;
@@ -8,6 +8,7 @@ use pathfinding::prelude::*;
 use rayon::prelude::*;
 
 use crate::draw::Drawable;
+use crate::draw::Textures;
 use crate::items::ItemInfo;
 use crate::items::ItemType;
 use crate::math::points_on_circumference;
@@ -82,14 +83,14 @@ impl Object {
 		&mut self.items
 	}
 
-	pub fn open_door(&mut self, textures: &HashMap<String, Texture2D>) {
+	pub fn open_door(&mut self, textures: &Textures) {
 		if let Some(door) = &mut self.door {
 			self.texture = *textures.get("open_door.webp").unwrap();
 			door.open();
 		}
 	}
 
-	pub fn close_door(&mut self, textures: &HashMap<String, Texture2D>) {
+	pub fn close_door(&mut self, textures: &Textures) {
 		if let Some(door) = &mut self.door {
 			self.texture = *textures.get("door.webp").unwrap();
 			door.close();
@@ -157,7 +158,7 @@ impl Room {
 			.collect()
 	}
 
-	fn generate_wall_objects(&self, textures: &HashMap<String, Texture2D>) -> Vec<Object> {
+	fn generate_wall_objects(&self, textures: &Textures) -> Vec<Object> {
 		self.generate_walls()
 			.into_iter()
 			.map(|w_pos| {
@@ -183,7 +184,7 @@ impl Room {
 			.collect()
 	}
 
-	fn generate_floor(&self, textures: &HashMap<String, Texture2D>) -> Vec<Object> {
+	fn generate_floor(&self, textures: &Textures) -> Vec<Object> {
 		let map_object = |x: i32, y: i32| -> Object {
 			// 1 in 250 chance of being a trapped tile
 			let is_trap: bool = rand::gen_range(1, 250) == 100;
@@ -248,7 +249,7 @@ pub struct FloorInfo {
 }
 
 impl FloorInfo {
-	pub fn new(_floor_num: usize, textures: &HashMap<String, Texture2D>) -> Self {
+	pub fn new(_floor_num: usize, textures: &Textures) -> Self {
 		let mut rooms = Vec::new();
 
 		// First, try to flll the map with as many rooms as possible
@@ -608,7 +609,7 @@ impl FloorInfo {
 		floor_info
 	}
 
-	fn spawn_monsters(&mut self, textures: &HashMap<String, Texture2D>) {
+	fn spawn_monsters(&mut self, textures: &Textures) {
 		let monsters = (0..55)
 			.into_par_iter()
 			.map(|_| {
@@ -703,7 +704,7 @@ impl Floor {
 
 		for ray in rays {
 			'ray: for pos in ray.into_iter() {
-				if let Some(index) = get_object_from_pos_mut(pos, &objects) {
+				if let Some(index) = get_object_from_pos_mut(pos, objects) {
 					visible_object_indices.push(index);
 
 					let obj = &objects[index];
@@ -719,12 +720,10 @@ impl Floor {
 			.copied()
 			.for_each(|i| objects[i].has_been_seen = true);
 
-		let visible_objects = visible_object_indices
+		visible_object_indices
 			.into_iter()
 			.map(|i| &objects[i])
-			.collect();
-
-		visible_objects
+			.collect()
 	}
 
 	pub fn visible_objects(&self, aabb: &dyn AsAABB, size: Option<i32>) -> Vec<&Object> {
@@ -768,18 +767,16 @@ pub struct Map {
 }
 
 impl Map {
-	pub fn new(textures: &HashMap<String, Texture2D>) -> Self {
+	pub fn new(textures: &Textures) -> Self {
 		let floors: Vec<FloorInfo> = (0..5)
 			.into_iter()
 			.map(|floor_num| FloorInfo::new(floor_num, textures))
 			.collect();
 
-		let map = Self {
+		Self {
 			current_floor_index: 0,
 			rooms: floors,
-		};
-
-		map
+		}
 	}
 
 	pub fn current_floor(&self) -> &FloorInfo {
@@ -816,7 +813,7 @@ impl Drawable for Object {
 
 fn find_viable_neighbors(
 	collidable_objects: &[Object], pos: IVec2, visible_objects: &Option<Vec<&Object>>,
-	randomness: Option<i32>,
+	_randomness: Option<i32>,
 ) -> Vec<(IVec2, i32)> {
 	let change = IVec4::new(-1, -1, 1, 1);
 	let new_pos = IVec4::new(pos.x, pos.y, pos.x, pos.y) + change;

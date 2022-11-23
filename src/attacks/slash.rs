@@ -1,9 +1,8 @@
-use std::collections::HashMap;
 
-use crate::draw::Drawable;
+
+use crate::draw::{Drawable, Textures};
 use crate::map::FloorInfo;
 use crate::math::{aabb_collision, get_angle, AsAABB, AxisAlignedBoundingBox};
-use crate::monsters::Monster;
 use crate::player::{DamageInfo, Player, PLAYER_SIZE};
 use macroquad::prelude::*;
 
@@ -22,8 +21,7 @@ pub struct Slash {
 
 impl Attack for Slash {
 	fn new(
-		player: &Player, angle: f32, textures: &HashMap<String, Texture2D>, _floor: &FloorInfo,
-		_is_primary: bool,
+		player: &Player, angle: f32, textures: &Textures, _floor: &FloorInfo, _is_primary: bool,
 	) -> Box<Self> {
 		Box::new(Self {
 			pos: player.pos(),

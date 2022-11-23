@@ -1,8 +1,8 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::fmt::Display;
 
 use crate::attacks::*;
-use crate::draw::Drawable;
+use crate::draw::{Drawable, Textures};
 use crate::enchantments::{Enchantable, Enchantment};
 use crate::items::ItemType::{self, *};
 use crate::items::{attack_with_item, ItemInfo};
@@ -33,7 +33,7 @@ impl TryFrom<&str> for PlayerClass {
 }
 
 /// Info regarding points such as HP or MP
-#[derive(Debug)]
+#[derive(Debug, Default)]
 struct PointInfo {
 	/// Currently number of points
 	points: u16,
@@ -41,17 +41,6 @@ struct PointInfo {
 	regen_rate: u16,
 	max_points: u16,
 	time_til_regen: u16,
-}
-
-impl Default for PointInfo {
-	fn default() -> Self {
-		Self {
-			points: 0,
-			regen_rate: 0,
-			max_points: 0,
-			time_til_regen: 0,
-		}
-	}
 }
 
 #[derive(Copy, Clone)]
@@ -115,9 +104,7 @@ pub struct Player {
 }
 
 impl Player {
-	pub fn new(
-		index: usize, class: PlayerClass, pos: Vec2, _textures: &HashMap<String, Texture2D>,
-	) -> Self {
+	pub fn new(index: usize, class: PlayerClass, pos: Vec2, _textures: &Textures) -> Self {
 		let primary_item = Some(match class {
 			PlayerClass::Warrior => ItemInfo::new(ShortSword, None),
 			PlayerClass::Wizard => ItemInfo::new(WizardGlove, None),
@@ -281,7 +268,6 @@ pub fn update_cooldowns(players: &mut [Player]) {
 				point_info.points += 1;
 
 				point_info.time_til_regen = point_info.regen_rate;
-				return;
 			}
 		}
 	};
@@ -295,13 +281,9 @@ pub fn update_cooldowns(players: &mut [Player]) {
 
 			p.time_til_change_spell = p.time_til_change_spell.saturating_sub(1);
 
-			if p.changing_spell {
-				if p.time_til_change_spell == 0 {
-					if !p.spells.is_empty() {
-						p.cycle_spells();
-						p.changing_spell = false;
-					}
-				}
+			if p.changing_spell && p.time_til_change_spell == 0 && !p.spells.is_empty() {
+				p.cycle_spells();
+				p.changing_spell = false;
 			}
 
 			regen(&mut p.hp);
@@ -311,7 +293,7 @@ pub fn update_cooldowns(players: &mut [Player]) {
 }
 
 pub fn player_attack(
-	player: &mut Player, textures: &HashMap<String, Texture2D>, attacks: &mut Vec<Box<dyn Attack>>,
+	player: &mut Player, textures: &Textures, attacks: &mut Vec<Box<dyn Attack>>,
 	floor: &FloorInfo, is_primary: bool,
 ) {
 	let item = match is_primary {
@@ -356,7 +338,7 @@ pub enum DoorInteraction {
 
 pub fn interact_with_door<A: AsAABB>(
 	entity: &A, players: &[Player], door_interaction: DoorInteraction, floor_info: &mut FloorInfo,
-	textures: &HashMap<String, Texture2D>,
+	textures: &Textures,
 ) {
 	// First, see if the player is in contact with a door
 	let entity_tile_pos = pos_to_tile(entity);
@@ -454,7 +436,7 @@ impl Drawable for Player {
 }
 
 impl Enchantable for Player {
-	fn apply_enchantment(&mut self, enchantment: Enchantment) {
+	fn apply_enchantment(&mut self, _enchantment: Enchantment) {
 		todo!()
 	}
 

@@ -1,6 +1,7 @@
-use std::collections::HashMap;
+
 
 use crate::attacks::Attack;
+use crate::draw::Textures;
 use crate::map::FloorInfo;
 use crate::math::get_angle;
 use crate::player::{
@@ -9,7 +10,7 @@ use crate::player::{
 use macroquad::prelude::*;
 
 pub fn movement_input(
-	player: &mut Player, attacks: &mut Vec<Box<dyn Attack>>, textures: &HashMap<String, Texture2D>,
+	player: &mut Player, attacks: &mut Vec<Box<dyn Attack>>, textures: &Textures,
 	floor_info: &mut FloorInfo,
 ) {
 	if player.hp() == 0 {
@@ -62,8 +63,7 @@ pub fn movement_input(
 }
 
 pub fn door_interaction_input(
-	player: &Player, players: &[Player], floor: &mut FloorInfo,
-	textures: &HashMap<String, Texture2D>,
+	player: &Player, players: &[Player], floor: &mut FloorInfo, textures: &Textures,
 ) {
 	if is_key_pressed(KeyCode::O) {
 		interact_with_door(player, players, DoorInteraction::Opening, floor, textures);

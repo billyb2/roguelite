@@ -8,7 +8,7 @@ mod math;
 mod monsters;
 mod player;
 
-use std::collections::HashMap;
+
 use std::fs;
 use std::io::{self, Write};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -67,7 +67,7 @@ void main() {
 
 const CAMERA_ZOOM: f32 = 0.0045;
 
-pub static TEXTURES: Lazy<HashMap<String, Texture2D>> = Lazy::new(|| {
+pub static TEXTURES: Lazy<Textures> = Lazy::new(|| {
 	fs::read_dir("assets")
 		.unwrap()
 		.filter_map(|file| {
@@ -285,7 +285,7 @@ async fn main() {
 				Vec2::new(screen_width() - 150.0, 20.0),
 				&match players[0].changing_spell {
 					false => format!("Spell: {}", players[0].spells()[0]),
-					true => format!("Cycling Spell..."),
+					true => "Cycling Spell...".to_string(),
 				},
 			);
 		}

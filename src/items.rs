@@ -1,9 +1,9 @@
 use macroquad::prelude::*;
-use std::{collections::HashMap, fmt::Display};
+use std::{fmt::Display};
 
 use crate::{
 	attacks::{Attack, BlindingLight, MagicMissile, Slash},
-	draw::Drawable,
+	draw::{Drawable, Textures},
 	map::{FloorInfo, TILE_SIZE},
 	math::{AsAABB, AxisAlignedBoundingBox},
 	player::{Player, Spell},
@@ -61,7 +61,7 @@ impl Display for ItemInfo {
 }
 
 pub fn attack_with_item(
-	item: ItemInfo, player: &mut Player, textures: &HashMap<String, Texture2D>, floor: &FloorInfo,
+	item: ItemInfo, player: &mut Player, textures: &Textures, floor: &FloorInfo,
 	primary_attack: bool,
 ) -> Option<Box<dyn Attack>> {
 	match item.item_type {

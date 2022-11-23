@@ -1,9 +1,9 @@
 mod small_rat;
 
-use std::collections::HashMap;
 use std::collections::HashSet;
 
 use crate::draw::Drawable;
+use crate::draw::Textures;
 use crate::enchantments::Enchantable;
 use crate::enchantments::Enchantment;
 use crate::map::Floor;
@@ -25,7 +25,7 @@ struct Effect {
 
 // All monsters are required to have a drawable AABB and be drawable
 pub trait Monster: AsAABB + Drawable + Send + Sync + Enchantable {
-	fn new(textures: &HashMap<String, Texture2D>, floor: &FloorInfo) -> Self
+	fn new(textures: &Textures, floor: &FloorInfo) -> Self
 	where
 		Self: Sized;
 	// Movement and damaging players are seperate so that the movement part can be

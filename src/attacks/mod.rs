@@ -2,11 +2,9 @@ mod blinding_light;
 mod magic_missle;
 mod slash;
 
-use std::collections::HashMap;
-
-use crate::draw::Drawable;
+use crate::draw::{Drawable, Textures};
 use crate::map::FloorInfo;
-use crate::monsters::Monster;
+
 use crate::player::Player;
 
 pub use blinding_light::*;
@@ -18,8 +16,7 @@ use macroquad::prelude::*;
 pub trait Attack: Drawable + Send + Sync {
 	/// Just gives some information about the attack
 	fn new(
-		player: &Player, angle: f32, textures: &HashMap<String, Texture2D>, floor: &FloorInfo,
-		is_primary: bool,
+		player: &Player, angle: f32, textures: &Textures, floor: &FloorInfo, is_primary: bool,
 	) -> Box<Self>
 	where
 		Self: Sized;
@@ -32,7 +29,7 @@ pub trait Attack: Drawable + Send + Sync {
 }
 
 pub fn update_attacks(
-	players: &mut [Player], floor: &mut FloorInfo, attacks: &mut Vec<Box<dyn Attack>>,
+	_players: &mut [Player], floor: &mut FloorInfo, attacks: &mut Vec<Box<dyn Attack>>,
 ) {
 	attacks.retain_mut(|attack| !attack.update(floor));
 }

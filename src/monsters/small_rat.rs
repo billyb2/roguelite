@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::draw::Drawable;
+use crate::draw::{Drawable, Textures};
 use crate::enchantments::{Enchantable, Enchantment, EnchantmentKind};
 use crate::map::{pos_to_tile, Floor, FloorInfo, Object, TILE_SIZE};
 use crate::math::{aabb_collision, get_angle, AsAABB, AxisAlignedBoundingBox};
@@ -43,7 +43,7 @@ pub struct SmallRat {
 }
 
 impl Monster for SmallRat {
-	fn new(textures: &HashMap<String, Texture2D>, floor_info: &FloorInfo) -> Self {
+	fn new(textures: &Textures, floor_info: &FloorInfo) -> Self {
 		// Choose a room decently far from the player
 		let valid_room_extents = floor_info
 			.floor
