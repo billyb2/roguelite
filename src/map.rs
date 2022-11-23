@@ -620,9 +620,9 @@ impl Floor {
 	}
 
 	pub fn find_path(
-		&self, pos: &dyn AsAABB, goal: &dyn AsAABB, only_visible: bool,
+		&self, pos: &dyn AsAABB, goal: &dyn AsAABB, only_visible: bool, randomness: Option<i32>,
 	) -> Option<Vec<Vec2>> {
-		find_path(pos, goal, self, only_visible)
+		find_path(pos, goal, self, only_visible, randomness)
 	}
 
 	pub fn should_descend(&self, players: &[Player], _monsters: &[Box<dyn Monster>]) -> bool {
@@ -764,6 +764,7 @@ impl Drawable for Object {
 
 fn find_viable_neighbors(
 	collidable_objects: &[Object], pos: IVec2, visible_objects: &Option<Vec<&Object>>,
+	randomness: Option<i32>,
 ) -> Vec<(IVec2, i32)> {
 	let change = IVec4::new(-1, -1, 1, 1);
 	let new_pos = IVec4::new(pos.x, pos.y, pos.x, pos.y) + change;
@@ -803,6 +804,7 @@ fn find_viable_neighbors(
 
 pub fn find_path(
 	start: &dyn AsAABB, goal: &dyn AsAABB, floor: &Floor, only_visible: bool,
+	randomness: Option<i32>,
 ) -> Option<Vec<Vec2>> {
 	let _aabb = start.as_aabb();
 
@@ -816,7 +818,7 @@ pub fn find_path(
 
 	let path = astar(
 		&start_tile_pos,
-		|pos| find_viable_neighbors(&floor.objects, *pos, &visible_objects),
+		|pos| find_viable_neighbors(&floor.objects, *pos, &visible_objects, randomness),
 		|pos| distance_squared(*pos, goal_tile_pos),
 		|pos| *pos == goal_tile_pos,
 	);

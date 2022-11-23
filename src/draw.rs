@@ -1,6 +1,8 @@
+use std::collections::HashMap;
+
 use macroquad::prelude::*;
 
-
+pub type Textures = HashMap<String, Texture2D>;
 
 pub trait Drawable {
 	fn size(&self) -> Vec2;

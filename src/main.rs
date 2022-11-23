@@ -16,6 +16,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use attacks::*;
 use draw::*;
 use input::*;
+use macroquad::miniquad::{BlendFactor, BlendState, BlendValue, Equation};
 use map::*;
 use monsters::*;
 use player::*;
@@ -28,26 +29,28 @@ use rayon::prelude::*;
 
 pub const MAX_VIEW_OF_PLAYER: f32 = 200.0;
 
-const DEFAULT_FRAGMENT_SHADER: &str = "#version 100
+const DEFAULT_FRAGMENT_SHADER: &str = "
+#version 100
 precision lowp float;
 varying vec2 uv;
 uniform sampler2D Texture;
 uniform lowp vec2 player_pos;
 uniform lowp float lowest_light_level;
 uniform lowp float window_height;
+const lowp float VISION_SIZE = 400.0;
 
 void main() {
     gl_FragColor = texture2D(Texture, uv);
-	vec2 frag_coord = gl_FragCoord.xy;
-	frag_coord.y = window_height - gl_FragCoord.y;
 
-	float lighting = 1.0 - min(length(frag_coord - player_pos), 400.0) / 400.0;
+	float lighting = 1.0 - min(length(gl_FragCoord.xy - player_pos), VISION_SIZE) / VISION_SIZE;
 	lighting *= lowest_light_level;
 	gl_FragColor.rgb *= vec3(lighting * 0.8);
+
 }
 ";
 
-const DEFAULT_VERTEX_SHADER: &str = "#version 100
+const DEFAULT_VERTEX_SHADER: &str = "
+#version 100
 precision lowp float;
 attribute vec3 position;
 attribute vec2 texcoord;
@@ -127,6 +130,11 @@ async fn main() {
 	let pipeline_params = PipelineParams {
 		depth_write: true,
 		depth_test: Comparison::LessOrEqual,
+		color_blend: Some(BlendState::new(
+			Equation::Add,
+			BlendFactor::Value(BlendValue::SourceAlpha),
+			BlendFactor::OneMinusValue(BlendValue::SourceAlpha),
+		)),
 		..Default::default()
 	};
 

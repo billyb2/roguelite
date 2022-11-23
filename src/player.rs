@@ -108,17 +108,17 @@ impl Player {
 
 		let mp = match class {
 			PlayerClass::Wizard => PointInfo {
-				points: 5,
-				max_points: 5,
+				points: 6,
+				max_points: 6,
 				// 8 seconds
-				regen_rate: 8 * 60,
+				regen_rate: 7 * 60,
 				..Default::default()
 			},
 			PlayerClass::Warrior => PointInfo {
 				points: 3,
 				max_points: 3,
 				// 10 seconds
-				regen_rate: 10 * 60,
+				regen_rate: 8 * 60,
 				..Default::default()
 			},
 		};

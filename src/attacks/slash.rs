@@ -21,7 +21,7 @@ pub struct Slash {
 
 impl Attack for Slash {
 	fn new(
-		player: &Player, angle: f32, textures: &HashMap<String, Texture2D>, floor: &Floor,
+		player: &Player, angle: f32, textures: &HashMap<String, Texture2D>, _floor: &Floor,
 		_is_primary: bool,
 	) -> Box<Self> {
 		Box::new(Self {

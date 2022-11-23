@@ -166,7 +166,7 @@ fn step_pathfinding<T: Fn(&mut SmallRat) -> Target>(
 					},
 				};
 
-				if let Some(path) = floor.find_path(my_monster, &goal_aabb, true) {
+				if let Some(path) = floor.find_path(my_monster, &goal_aabb, true, Some(3)) {
 					my_monster.current_path = Some((path, 1));
 				} else {
 					my_monster.current_target = Some(find_target(my_monster));
