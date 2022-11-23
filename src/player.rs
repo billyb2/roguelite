@@ -24,9 +24,9 @@ impl TryFrom<&str> for PlayerClass {
 	type Error = PlayerClassError;
 
 	fn try_from(value: &str) -> Result<Self, Self::Error> {
-		match value {
-			"Warrior" => Ok(PlayerClass::Warrior),
-			"Wizard" => Ok(PlayerClass::Wizard),
+		match value.to_lowercase().as_str() {
+			"warrior" => Ok(PlayerClass::Warrior),
+			"wizard" => Ok(PlayerClass::Wizard),
 			_ => Err(PlayerClassError),
 		}
 	}
