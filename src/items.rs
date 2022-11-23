@@ -4,42 +4,40 @@ use std::{collections::HashMap, fmt::Display};
 use crate::{
 	attacks::{Attack, BlindingLight, MagicMissile, Slash},
 	draw::Drawable,
-	map::{Floor, TILE_SIZE},
+	map::{FloorInfo, TILE_SIZE},
+	math::{AsAABB, AxisAlignedBoundingBox},
 	player::{Player, Spell},
+	TEXTURES,
 };
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub enum ItemType {
 	ShortSword,
 	WizardGlove,
 	Gold(u32),
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct ItemInfo {
 	cursed: bool,
-	item_type: ItemType,
+	pub item_type: ItemType,
 	// If there is no pos, it's in the player's inventory
 	tile_pos: Option<IVec2>,
-	texture: Texture2D,
 }
 
 impl ItemInfo {
 	// Creates a default item
-	pub fn new(
-		item_type: ItemType, tile_pos: Option<IVec2>, textures: &HashMap<String, Texture2D>,
-	) -> Self {
+	pub fn new(item_type: ItemType, tile_pos: Option<IVec2>) -> Self {
 		Self {
 			cursed: false,
 			item_type,
 			tile_pos,
-			texture: *textures.get("gold.webp").unwrap(),
 		}
 	}
 
 	pub fn description(&self) -> String {
 		let mut description = match self.item_type {
-			ItemType::WizardGlove => "The glove wielded by mighty sorcers. Thiey alow magic users to directly tough the energy around them and manipulate it to their will.",
+			ItemType::WizardGlove => "A glove wielded by mighty sorcerers. Thiey alow magic users to directly tough the energy around them and manipulate it to their will.",
 			ItemType::ShortSword => "A sturdy short sword, passed down from many generations.",
 			ItemType::Gold(_) => "Gold! Currency! Can be used at shops to purchase items",
 		}.to_string();
@@ -63,7 +61,7 @@ impl Display for ItemInfo {
 }
 
 pub fn attack_with_item(
-	item: ItemInfo, player: &mut Player, textures: &HashMap<String, Texture2D>, floor: &Floor,
+	item: ItemInfo, player: &mut Player, textures: &HashMap<String, Texture2D>, floor: &FloorInfo,
 	primary_attack: bool,
 ) -> Option<Box<dyn Attack>> {
 	match item.item_type {
@@ -90,6 +88,15 @@ pub fn attack_with_item(
 	}
 }
 
+impl AsAABB for ItemInfo {
+	fn as_aabb(&self) -> AxisAlignedBoundingBox {
+		AxisAlignedBoundingBox {
+			pos: self.pos(),
+			size: Vec2::splat(32.0),
+		}
+	}
+}
+
 impl Drawable for ItemInfo {
 	fn size(&self) -> Vec2 {
 		Vec2::splat(32.0)
@@ -101,6 +108,6 @@ impl Drawable for ItemInfo {
 	}
 
 	fn texture(&self) -> Option<Texture2D> {
-		Some(self.texture)
+		Some(*TEXTURES.get("gold.webp").unwrap())
 	}
 }

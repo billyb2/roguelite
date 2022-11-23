@@ -5,7 +5,7 @@ mod slash;
 use std::collections::HashMap;
 
 use crate::draw::Drawable;
-use crate::map::Floor;
+use crate::map::FloorInfo;
 use crate::monsters::Monster;
 use crate::player::Player;
 
@@ -18,22 +18,21 @@ use macroquad::prelude::*;
 pub trait Attack: Drawable + Send + Sync {
 	/// Just gives some information about the attack
 	fn new(
-		player: &Player, angle: f32, textures: &HashMap<String, Texture2D>, floor: &Floor,
+		player: &Player, angle: f32, textures: &HashMap<String, Texture2D>, floor: &FloorInfo,
 		is_primary: bool,
 	) -> Box<Self>
 	where
 		Self: Sized;
 	/// If the attack has any side effects on the user, do them here
-	fn side_effects(&self, player: &mut Player, floor: &Floor);
+	fn side_effects(&self, player: &mut Player, floor: &FloorInfo);
 	fn mana_cost(&self) -> u16;
 	// Returns whether or not the attack should be destroyed
-	fn update(&mut self, monsters: &mut [Box<dyn Monster>], floor: &Floor) -> bool;
+	fn update(&mut self, floor: &mut FloorInfo) -> bool;
 	fn cooldown(&self) -> u16;
 }
 
 pub fn update_attacks(
-	monsters: &mut [Box<dyn Monster>], players: &mut [Player], floor: &Floor,
-	attacks: &mut Vec<Box<dyn Attack>>,
+	players: &mut [Player], floor: &mut FloorInfo, attacks: &mut Vec<Box<dyn Attack>>,
 ) {
-	attacks.retain_mut(|attack| !attack.update(monsters, floor));
+	attacks.retain_mut(|attack| !attack.update(floor));
 }

@@ -18,8 +18,8 @@ use crate::player::Player;
 
 pub const TILE_SIZE: usize = 25;
 
-pub const MAP_WIDTH_TILES: usize = 80;
-pub const MAP_HEIGHT_TILES: usize = 80;
+pub const MAP_WIDTH_TILES: usize = 50;
+pub const MAP_HEIGHT_TILES: usize = 50;
 
 pub const MAP_SIZE_TILES: IVec2 = IVec2::new(MAP_WIDTH_TILES as i32, MAP_HEIGHT_TILES as i32);
 
@@ -76,6 +76,10 @@ impl Object {
 
 	pub fn has_been_seen(&self) -> bool {
 		self.has_been_seen
+	}
+
+	pub fn items_mut(&mut self) -> &mut Vec<ItemInfo> {
+		&mut self.items
 	}
 
 	pub fn open_door(&mut self, textures: &HashMap<String, Texture2D>) {
@@ -206,7 +210,6 @@ impl Room {
 				items.push(ItemInfo::new(
 					ItemType::Gold(rand::gen_range(8, 20)),
 					Some(pos),
-					textures,
 				));
 			}
 
@@ -237,38 +240,14 @@ impl Room {
 	}
 }
 
-pub struct Floor {
+pub struct FloorInfo {
 	spawn: Vec2,
-	rooms: Vec<Room>,
-	pub objects: Vec<Object>,
+	pub monsters: Vec<Box<dyn Monster>>,
+	pub floor: Floor,
 	exit: Object,
 }
 
-impl Floor {
-	pub fn get_object_from_pos(&self, pos: IVec2) -> Option<&Object> {
-		self.objects
-			.get((pos.x + pos.y * MAP_WIDTH_TILES as i32) as usize)
-	}
-
-	pub fn rooms(&self) -> &Vec<Room> {
-		&self.rooms
-	}
-
-	// Same as collision, but returns the actual Object collided w.
-	pub fn collision_obj<A: AsAABB>(&self, aabb: &A, distance: Vec2) -> Option<&Object> {
-		self.objects
-			.iter()
-			.find(|object| object.is_collidable() && aabb_collision(aabb, *object, distance))
-	}
-
-	pub fn collision<A: AsAABB>(&self, aabb: &A, distance: Vec2) -> bool {
-		self.collision_obj(aabb, distance).is_some()
-	}
-
-	pub fn current_spawn(&self) -> Vec2 {
-		self.spawn
-	}
-
+impl FloorInfo {
 	pub fn new(_floor_num: usize, textures: &HashMap<String, Texture2D>) -> Self {
 		let mut rooms = Vec::new();
 
@@ -607,10 +586,11 @@ impl Floor {
 			.map(|obj| unsafe { obj.assume_init() })
 			.collect();
 
-		Floor {
+		let floor = Floor { objects, rooms };
+
+		let mut floor_info = FloorInfo {
 			spawn,
-			objects,
-			rooms,
+			floor,
 			exit: Object {
 				pos: exit_pos,
 				texture: *textures.get("green.webp").unwrap(),
@@ -620,11 +600,71 @@ impl Floor {
 				items: Vec::new(),
 				is_floor: true,
 			},
-		}
+			monsters: Vec::new(),
+		};
+
+		floor_info.spawn_monsters(textures);
+
+		floor_info
+	}
+
+	fn spawn_monsters(&mut self, textures: &HashMap<String, Texture2D>) {
+		let monsters = (0..55)
+			.into_par_iter()
+			.map(|_| {
+				let monster: Box<dyn Monster> = Box::new(SmallRat::new(textures, self));
+				monster
+			})
+			.collect();
+
+		self.monsters = monsters;
+	}
+
+	pub fn should_descend(&self, players: &[Player]) -> bool {
+		// If any players are touching the exit, descend a floor
+		players
+			.iter()
+			.any(|p| aabb_collision(p, &self.exit, Vec2::ZERO))
 	}
 
 	pub fn exit(&self) -> &Object {
 		&self.exit
+	}
+
+	pub fn current_spawn(&self) -> Vec2 {
+		self.spawn
+	}
+}
+
+pub struct Floor {
+	rooms: Vec<Room>,
+	objects: Vec<Object>,
+}
+
+impl Floor {
+	pub fn get_object_from_pos(&self, pos: IVec2) -> Option<&Object> {
+		self.objects
+			.get((pos.x + pos.y * MAP_WIDTH_TILES as i32) as usize)
+	}
+
+	pub fn get_object_from_pos_mut(&mut self, pos: IVec2) -> Option<&mut Object> {
+		self.objects
+			.get_mut((pos.x + pos.y * MAP_WIDTH_TILES as i32) as usize)
+	}
+
+	pub fn rooms(&self) -> &Vec<Room> {
+		&self.rooms
+	}
+
+	// Same as collision, but returns the actual Object collided w.
+	pub fn collision_obj<A: AsAABB>(&self, aabb: &A, distance: Vec2) -> Option<&Object> {
+		self.objects
+			.iter()
+			.find(|object| object.is_collidable() && aabb_collision(aabb, *object, distance))
+	}
+
+	pub fn collision<A: AsAABB>(&self, aabb: &A, distance: Vec2) -> bool {
+		self.collision_obj(aabb, distance).is_some()
 	}
 
 	pub fn doors(&mut self) -> impl Iterator<Item = &mut Object> {
@@ -645,13 +685,6 @@ impl Floor {
 		&self, pos: &dyn AsAABB, goal: &dyn AsAABB, only_visible: bool, randomness: Option<i32>,
 	) -> Option<Vec<Vec2>> {
 		find_path(pos, goal, self, only_visible, randomness)
-	}
-
-	pub fn should_descend(&self, players: &[Player], _monsters: &[Box<dyn Monster>]) -> bool {
-		// If any players are touching the exit, descend a floor
-		players
-			.iter()
-			.any(|p| aabb_collision(p, &self.exit, Vec2::ZERO))
 	}
 
 	pub fn visible_objects_mut<'a>(
@@ -719,20 +752,26 @@ impl Floor {
 
 		visible_objects
 	}
+
+	pub fn objects(&self) -> &[Object] {
+		&self.objects
+	}
+
+	pub fn objects_mut(&mut self) -> &mut [Object] {
+		&mut self.objects
+	}
 }
 
 pub struct Map {
 	current_floor_index: usize,
-	rooms: Vec<Floor>,
+	rooms: Vec<FloorInfo>,
 }
 
 impl Map {
-	pub fn new(
-		textures: &HashMap<String, Texture2D>, monsters: &mut Vec<Box<dyn Monster>>,
-	) -> Self {
-		let floors: Vec<Floor> = (0..5)
+	pub fn new(textures: &HashMap<String, Texture2D>) -> Self {
+		let floors: Vec<FloorInfo> = (0..5)
 			.into_iter()
-			.map(|floor_num| Floor::new(floor_num, textures))
+			.map(|floor_num| FloorInfo::new(floor_num, textures))
 			.collect();
 
 		let map = Self {
@@ -740,33 +779,24 @@ impl Map {
 			rooms: floors,
 		};
 
-		spawn_monsters(0, monsters, textures, map.current_floor());
-
 		map
 	}
 
-	pub fn current_floor(&self) -> &Floor {
+	pub fn current_floor(&self) -> &FloorInfo {
 		&self.rooms[self.current_floor_index]
 	}
 
-	pub fn current_floor_mut(&mut self) -> &mut Floor {
+	pub fn current_floor_mut(&mut self) -> &mut FloorInfo {
 		&mut self.rooms[self.current_floor_index]
 	}
 
-	pub fn descend(
-		&mut self, players: &mut [Player], monsters: &mut Vec<Box<dyn Monster>>,
-		textures: &HashMap<String, Texture2D>,
-	) {
+	pub fn descend(&mut self, players: &mut [Player]) {
 		self.current_floor_index += 1;
-		let current_floor = self.current_floor();
+		let current_floor = self.current_floor_mut();
 
 		players.iter_mut().for_each(|p| {
 			p.pos = current_floor.spawn;
 		});
-
-		monsters.clear();
-
-		spawn_monsters(self.current_floor_index, monsters, textures, current_floor);
 	}
 }
 
@@ -853,19 +883,6 @@ pub fn find_path(
 	})
 }
 
-fn spawn_monsters(
-	_floor_num: usize, monsters: &mut Vec<Box<dyn Monster>>, textures: &HashMap<String, Texture2D>,
-	floor: &Floor,
-) {
-	(0..85)
-		.into_par_iter()
-		.map(|_| {
-			let monster: Box<dyn Monster> = Box::new(SmallRat::new(textures, floor));
-			monster
-		})
-		.collect_into_vec(monsters);
-}
-
 pub fn distance_squared(pos1: IVec2, pos2: IVec2) -> i32 {
 	let mut diff = pos2 - pos1;
 	diff = diff * diff;
@@ -880,14 +897,14 @@ pub fn pos_to_tile(obj: &dyn AsAABB) -> IVec2 {
 	(center / Vec2::splat(TILE_SIZE as f32)).round().as_ivec2()
 }
 
-pub fn trigger_traps(players: &mut [Player], floor: &mut Floor) {
-	let rand_room = floor.rooms.choose().unwrap();
+pub fn trigger_traps(players: &mut [Player], floor_info: &mut FloorInfo) {
+	let rand_room = floor_info.floor.rooms.choose().unwrap();
 	let rand_pos = IVec2::new(
 		rand::gen_range(rand_room.top_left.x + 1, rand_room.bottom_right.x - 1),
 		rand::gen_range(rand_room.top_left.y + 1, rand_room.bottom_right.y - 1),
 	);
 
-	let trapped_objs = floor.untriggered_traps();
+	let trapped_objs = floor_info.floor.untriggered_traps();
 
 	trapped_objs.for_each(|trapped_obj| {
 		players.iter_mut().for_each(|player| {

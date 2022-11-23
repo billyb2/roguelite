@@ -1,14 +1,13 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
 
 use crate::attacks::*;
 use crate::draw::Drawable;
 use crate::enchantments::{Enchantable, Enchantment};
-use crate::items::ItemType::*;
+use crate::items::ItemType::{self, *};
 use crate::items::{attack_with_item, ItemInfo};
-use crate::map::{pos_to_tile, Floor, TILE_SIZE};
-use crate::math::{AsAABB, AxisAlignedBoundingBox};
-use crate::monsters::Monster;
+use crate::map::{pos_to_tile, Floor, FloorInfo, TILE_SIZE};
+use crate::math::{aabb_collision, AsAABB, AxisAlignedBoundingBox};
 use macroquad::prelude::*;
 
 pub const PLAYER_SIZE: f32 = 12.0;
@@ -70,6 +69,22 @@ impl Display for Spell {
 	}
 }
 
+pub struct PlayerInventory {
+	items: HashSet<ItemInfo>,
+}
+
+impl PlayerInventory {
+	fn new() -> Self {
+		Self {
+			items: HashSet::new(),
+		}
+	}
+
+	fn add_item(&mut self, item: ItemInfo) {
+		self.items.insert(item);
+	}
+}
+
 pub struct Player {
 	pub angle: f32,
 	pub pos: Vec2,
@@ -94,15 +109,18 @@ pub struct Player {
 
 	pub xp: u32,
 	pub level: u32,
+
+	pub gold: u32,
+	pub inventory: PlayerInventory,
 }
 
 impl Player {
 	pub fn new(
-		index: usize, class: PlayerClass, pos: Vec2, textures: &HashMap<String, Texture2D>,
+		index: usize, class: PlayerClass, pos: Vec2, _textures: &HashMap<String, Texture2D>,
 	) -> Self {
 		let primary_item = Some(match class {
-			PlayerClass::Warrior => ItemInfo::new(ShortSword, None, textures),
-			PlayerClass::Wizard => ItemInfo::new(WizardGlove, None, textures),
+			PlayerClass::Warrior => ItemInfo::new(ShortSword, None),
+			PlayerClass::Wizard => ItemInfo::new(WizardGlove, None),
 		});
 
 		let hp = match class {
@@ -166,7 +184,9 @@ impl Player {
 			changing_spell: false,
 			time_til_change_spell: 0,
 			xp: 0,
-			level: 1,
+			level: 0,
+			gold: 0,
+			inventory: PlayerInventory::new(),
 		}
 	}
 
@@ -174,9 +194,8 @@ impl Player {
 		self.xp += xp;
 
 		let xp_to_level_up = match self.level {
-			0 => unimplemented!(),
-			1 => 14,
-			2 => 16,
+			0 => 14,
+			1 => 16,
 			_ => todo!(),
 		};
 
@@ -226,11 +245,11 @@ impl Player {
 	}
 }
 
-pub fn move_player(player: &mut Player, angle: f32, speed: Option<Vec2>, floor: &Floor) {
+pub fn move_player(player: &mut Player, angle: f32, speed: Option<Vec2>, floor_info: &Floor) {
 	let direction: Vec2 = (angle.cos(), angle.sin()).into();
 	let distance = direction * speed.unwrap_or_else(|| Vec2::splat(player.speed));
 
-	if !floor.collision(player, distance) {
+	if !floor_info.collision(player, distance) {
 		player.pos += distance;
 	}
 }
@@ -268,30 +287,32 @@ pub fn update_cooldowns(players: &mut [Player]) {
 	};
 
 	players.iter_mut().for_each(|p| {
-		p.primary_cooldown = p.primary_cooldown.saturating_sub(1);
-		p.secondary_cooldown = p.secondary_cooldown.saturating_sub(1);
+		if p.hp.points != 0 {
+			p.primary_cooldown = p.primary_cooldown.saturating_sub(1);
+			p.secondary_cooldown = p.secondary_cooldown.saturating_sub(1);
 
-		p.invincibility_frames = p.invincibility_frames.saturating_sub(1);
+			p.invincibility_frames = p.invincibility_frames.saturating_sub(1);
 
-		p.time_til_change_spell = p.time_til_change_spell.saturating_sub(1);
+			p.time_til_change_spell = p.time_til_change_spell.saturating_sub(1);
 
-		if p.changing_spell {
-			if p.time_til_change_spell == 0 {
-				if !p.spells.is_empty() {
-					p.cycle_spells();
-					p.changing_spell = false;
+			if p.changing_spell {
+				if p.time_til_change_spell == 0 {
+					if !p.spells.is_empty() {
+						p.cycle_spells();
+						p.changing_spell = false;
+					}
 				}
 			}
-		}
 
-		regen(&mut p.hp);
-		regen(&mut p.mp);
+			regen(&mut p.hp);
+			regen(&mut p.mp);
+		}
 	});
 }
 
 pub fn player_attack(
 	player: &mut Player, textures: &HashMap<String, Texture2D>, attacks: &mut Vec<Box<dyn Attack>>,
-	floor: &Floor, is_primary: bool,
+	floor: &FloorInfo, is_primary: bool,
 ) {
 	let item = match is_primary {
 		true => player.primary_item,
@@ -334,20 +355,22 @@ pub enum DoorInteraction {
 }
 
 pub fn interact_with_door<A: AsAABB>(
-	entity: &A, players: &[Player], monsters: &[Box<dyn Monster>],
-	door_interaction: DoorInteraction, floor: &mut Floor, textures: &HashMap<String, Texture2D>,
+	entity: &A, players: &[Player], door_interaction: DoorInteraction, floor_info: &mut FloorInfo,
+	textures: &HashMap<String, Texture2D>,
 ) {
 	// First, see if the player is in contact with a door
 	let entity_tile_pos = pos_to_tile(entity);
 
 	// Find all door that's within one tile distance of the player, then pick the closest one
 
-	let door = floor
+	let door = floor_info
+		.floor
 		.doors()
 		.filter(|door| {
 			let tile_distance = (door.tile_pos() - entity_tile_pos).abs();
 
-			let entity_in_door = monsters
+			let entity_in_door = floor_info
+				.monsters
 				.iter()
 				.map(|m| pos_to_tile(&m.as_aabb()))
 				.chain(players.iter().map(|p| pos_to_tile(p)))
@@ -437,5 +460,28 @@ impl Enchantable for Player {
 
 	fn update_enchantments(&mut self) {
 		todo!()
+	}
+}
+
+pub fn pickup_items(player: &mut Player, floor: &mut Floor) {
+	let mut item = None;
+
+	'search: for i in 0..floor.objects().len() {
+		let object = &mut floor.objects_mut()[i];
+		let items = object.items_mut();
+
+		for i in 0..items.len() {
+			if aabb_collision(&items[i], player, Vec2::ZERO) {
+				item = Some(items.remove(i));
+				break 'search;
+			}
+		}
+	}
+
+	if let Some(item) = item {
+		match item.item_type {
+			ItemType::Gold(gold) => player.gold += gold,
+			_ => player.inventory.add_item(item),
+		};
 	}
 }

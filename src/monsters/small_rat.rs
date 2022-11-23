@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use crate::draw::Drawable;
 use crate::enchantments::{Enchantable, Enchantment, EnchantmentKind};
-use crate::map::{pos_to_tile, Floor, Object, TILE_SIZE};
+use crate::map::{pos_to_tile, Floor, FloorInfo, Object, TILE_SIZE};
 use crate::math::{aabb_collision, get_angle, AsAABB, AxisAlignedBoundingBox};
 use crate::monsters::Monster;
 use crate::player::{damage_player, DamageInfo, Player};
@@ -43,9 +43,10 @@ pub struct SmallRat {
 }
 
 impl Monster for SmallRat {
-	fn new(textures: &HashMap<String, Texture2D>, floor: &Floor) -> Self {
+	fn new(textures: &HashMap<String, Texture2D>, floor_info: &FloorInfo) -> Self {
 		// Choose a room decently far from the player
-		let valid_room_extents = floor
+		let valid_room_extents = floor_info
+			.floor
 			.rooms()
 			.iter()
 			.filter_map(|room| {
@@ -53,7 +54,8 @@ impl Monster for SmallRat {
 				let room_center = (room_top_left + room_bottom_right) / 2;
 				let room_center_pos = (room_center * IVec2::splat(TILE_SIZE as i32)).as_vec2();
 
-				match room_center_pos.distance(floor.current_spawn()) > (12 * TILE_SIZE) as f32 {
+				match room_center_pos.distance(floor_info.current_spawn()) > (12 * TILE_SIZE) as f32
+				{
 					true => Some((room_top_left, room_bottom_right)),
 					false => None,
 				}
@@ -166,7 +168,7 @@ fn step_pathfinding<T: Fn(&mut SmallRat) -> Target>(
 					},
 				};
 
-				if let Some(path) = floor.find_path(my_monster, &goal_aabb, true, Some(3)) {
+				if let Some(path) = floor.find_path(my_monster, &goal_aabb, true, Some(4)) {
 					my_monster.current_path = Some((path, 1));
 				} else {
 					my_monster.current_target = Some(find_target(my_monster));
@@ -185,6 +187,19 @@ fn step_pathfinding<T: Fn(&mut SmallRat) -> Target>(
 				if speed >= distance_to_target {
 					my_monster.pos = *pos;
 					*i += 1;
+
+					// On every even turn
+					if *i & 1 == 0 {
+						// If our target moves, then change our path
+						let target_pos = match my_monster.current_target.unwrap() {
+							Target::Pos(pos) => pos,
+							Target::PlayerIndex(i) => players[i].pos,
+						};
+
+						if *pos != target_pos {
+							my_monster.current_path = None;
+						}
+					}
 				} else {
 					let angle = get_angle(*pos, my_monster.pos);
 					let change = Vec2::new(angle.cos(), angle.sin()) * speed;

@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::draw::Drawable;
 use crate::enchantments::{Enchantment, EnchantmentKind};
-use crate::map::Floor;
+use crate::map::FloorInfo;
 use crate::math::{aabb_collision, AsAABB, AxisAlignedBoundingBox};
 use crate::monsters::Monster;
 use crate::player::Player;
@@ -21,7 +21,7 @@ pub struct BlindingLight {
 
 impl Attack for BlindingLight {
 	fn new(
-		player: &Player, angle: f32, textures: &HashMap<String, Texture2D>, _floor: &Floor,
+		player: &Player, angle: f32, textures: &HashMap<String, Texture2D>, _floor: &FloorInfo,
 		_is_primary: bool,
 	) -> Box<Self> {
 		Box::new(Self {
@@ -32,7 +32,7 @@ impl Attack for BlindingLight {
 		})
 	}
 
-	fn update(&mut self, monsters: &mut [Box<dyn Monster>], _floor: &Floor) -> bool {
+	fn update(&mut self, floor: &mut FloorInfo) -> bool {
 		self.time += 1;
 
 		if self.time >= 60 {
@@ -40,7 +40,8 @@ impl Attack for BlindingLight {
 		}
 
 		// Check to see if it's collided with a monster
-		monsters
+		floor
+			.monsters
 			.iter_mut()
 			.filter(|m| aabb_collision(self, &m.as_aabb(), Vec2::ZERO))
 			.for_each(|monster| {
@@ -61,7 +62,7 @@ impl Attack for BlindingLight {
 		3
 	}
 
-	fn side_effects(&self, player: &mut Player, floor: &Floor) {}
+	fn side_effects(&self, player: &mut Player, floor: &FloorInfo) {}
 }
 
 impl AsAABB for BlindingLight {

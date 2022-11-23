@@ -24,6 +24,7 @@ use player::*;
 use macroquad::miniquad::conf::Platform;
 use macroquad::prelude::*;
 use macroquad::ui::{root_ui, Skin};
+use once_cell::sync::Lazy;
 
 use rayon::prelude::*;
 
@@ -66,6 +67,24 @@ void main() {
 
 const CAMERA_ZOOM: f32 = 0.0045;
 
+pub static TEXTURES: Lazy<HashMap<String, Texture2D>> = Lazy::new(|| {
+	fs::read_dir("assets")
+		.unwrap()
+		.filter_map(|file| {
+			if let Ok(file) = file {
+				let file_name = file.file_name().to_str().unwrap().to_string();
+
+				let image_bytes = fs::read(file.path()).unwrap();
+				let texture = Texture2D::from_file_with_format(&image_bytes, None);
+
+				Some((file_name, texture))
+			} else {
+				None
+			}
+		})
+		.collect()
+});
+
 #[macroquad::main(window_conf)]
 async fn main() {
 	let time = SystemTime::elapsed(&UNIX_EPOCH).unwrap().as_secs();
@@ -87,31 +106,14 @@ async fn main() {
 		},
 	};
 
-	let textures: HashMap<String, Texture2D> = fs::read_dir("assets")
-		.unwrap()
-		.filter_map(|file| {
-			if let Ok(file) = file {
-				let file_name = file.file_name().to_str().unwrap().to_string();
-
-				let image_bytes = fs::read(file.path()).unwrap();
-				let texture = Texture2D::from_file_with_format(&image_bytes, None);
-
-				Some((file_name, texture))
-			} else {
-				None
-			}
-		})
-		.collect();
-
-	let mut monsters: Vec<Box<dyn Monster>> = Vec::new();
 	let mut attacks = Vec::new();
 
-	let mut map = Map::new(&textures, &mut monsters);
+	let mut map = Map::new(&TEXTURES);
 	let mut players = vec![Player::new(
 		0,
 		class,
 		map.current_floor().current_spawn(),
-		&textures,
+		&TEXTURES,
 	)];
 
 	let mut camera = Camera2D {
@@ -166,43 +168,26 @@ async fn main() {
 	root_ui().push_skin(&skin);
 
 	loop {
-		let frame_time = get_frame_time();
 		frames_till_update_framerate -= 1;
 
 		// If running at more than 60 fps, slow down
-		if frame_time < 1.0 / 60.0 {
-			let time_to_sleep = ((1.0 / 60.0) - frame_time) * 1000.0;
-			std::thread::sleep(std::time::Duration::from_millis(time_to_sleep as u64));
-		}
-
 		// Logic
 		movement_input(
 			&mut players[0],
 			&mut attacks,
-			&textures,
+			&TEXTURES,
 			map.current_floor_mut(),
 		);
 
-		door_interaction_input(
-			&players[0],
-			&players,
-			&monsters,
-			map.current_floor_mut(),
-			&textures,
-		);
+		door_interaction_input(&players[0], &players, map.current_floor_mut(), &TEXTURES);
 
 		trigger_traps(&mut players, map.current_floor_mut());
 		update_cooldowns(&mut players);
-		update_attacks(
-			&mut monsters,
-			&mut players,
-			map.current_floor(),
-			&mut attacks,
-		);
-		update_monsters(&mut monsters, &mut players, map.current_floor());
+		update_attacks(&mut players, map.current_floor_mut(), &mut attacks);
+		update_monsters(&mut players, map.current_floor_mut());
 
-		if map.current_floor().should_descend(&players, &monsters) {
-			map.descend(&mut players, &mut monsters, &textures)
+		if map.current_floor().should_descend(&players) {
+			map.descend(&mut players);
 		}
 
 		// Rendering
@@ -218,8 +203,12 @@ async fn main() {
 		gl_use_material(material);
 
 		// Draw all visible objects
-		let visible_objects =
-			Floor::visible_objects_mut(&players[0], None, &mut map.current_floor_mut().objects);
+		let current_floor_info = map.current_floor_mut();
+
+		let monsters = &current_floor_info.monsters;
+		let floor = &mut current_floor_info.floor;
+
+		let visible_objects = Floor::visible_objects_mut(&players[0], None, floor.objects_mut());
 
 		material.set_uniform("lowest_light_level", 1.0_f32);
 
@@ -242,7 +231,7 @@ async fn main() {
 
 		material.set_uniform("lowest_light_level", 0.65_f32);
 
-		let visible_objects = map.current_floor().visible_objects(&players[0], None);
+		let visible_objects = map.current_floor().floor.visible_objects(&players[0], None);
 
 		visible_objects
 			.iter()
@@ -261,7 +250,8 @@ async fn main() {
 
 		// Draw all objects that have been seen
 		map.current_floor()
-			.objects
+			.floor
+			.objects()
 			.par_iter()
 			.filter(only_show_past_seen_objects)
 			.collect::<Vec<&Object>>()
@@ -301,6 +291,8 @@ async fn main() {
 		}
 
 		if SHOW_FRAMERATE && frames_till_update_framerate == 0 {
+			let frame_time = get_frame_time();
+
 			fps = (1.0 / frame_time).round();
 			frames_till_update_framerate = 30;
 		}

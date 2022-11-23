@@ -7,6 +7,7 @@ use crate::draw::Drawable;
 use crate::enchantments::Enchantable;
 use crate::enchantments::Enchantment;
 use crate::map::Floor;
+use crate::map::FloorInfo;
 use crate::math::{AsAABB, AxisAlignedBoundingBox};
 use crate::player::DamageInfo;
 use crate::player::Player;
@@ -23,8 +24,8 @@ struct Effect {
 }
 
 // All monsters are required to have a drawable AABB and be drawable
-pub trait Monster: AsAABB + Drawable + Send + Enchantable {
-	fn new(textures: &HashMap<String, Texture2D>, floor: &Floor) -> Self
+pub trait Monster: AsAABB + Drawable + Send + Sync + Enchantable {
+	fn new(textures: &HashMap<String, Texture2D>, floor: &FloorInfo) -> Self
 	where
 		Self: Sized;
 	// Movement and damaging players are seperate so that the movement part can be
@@ -40,17 +41,15 @@ pub trait Monster: AsAABB + Drawable + Send + Enchantable {
 	}
 }
 
-pub fn update_monsters(
-	monsters: &mut Vec<Box<dyn Monster>>, players: &mut [Player], floor: &Floor,
-) {
-	monsters.par_iter_mut().for_each(|m| {
+pub fn update_monsters(players: &mut [Player], floor_info: &mut FloorInfo) {
+	floor_info.monsters.par_iter_mut().for_each(|m| {
 		// Only move monsters that are within a certain distance of any player
 		m.update_enchantments();
-		m.movement(players, floor);
+		m.movement(players, &floor_info.floor);
 	});
 
-	monsters.retain_mut(|m| {
-		m.damage_players(players, floor);
+	floor_info.monsters.retain_mut(|m| {
+		m.damage_players(players, &floor_info.floor);
 		let living = m.living();
 
 		// If a monster dies, give all players who damaged it some XP

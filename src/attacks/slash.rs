@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::draw::Drawable;
-use crate::map::Floor;
+use crate::map::FloorInfo;
 use crate::math::{aabb_collision, get_angle, AsAABB, AxisAlignedBoundingBox};
 use crate::monsters::Monster;
 use crate::player::{DamageInfo, Player, PLAYER_SIZE};
@@ -17,12 +17,12 @@ pub struct Slash {
 	texture: Texture2D,
 	time: u16,
 	player_index: usize,
-	num_enemies_pierced: u8,
+	num_piercings: u8,
 }
 
 impl Attack for Slash {
 	fn new(
-		player: &Player, angle: f32, textures: &HashMap<String, Texture2D>, _floor: &Floor,
+		player: &Player, angle: f32, textures: &HashMap<String, Texture2D>, _floor: &FloorInfo,
 		_is_primary: bool,
 	) -> Box<Self> {
 		Box::new(Self {
@@ -31,22 +31,22 @@ impl Attack for Slash {
 			texture: *textures.get("slash.webp").unwrap(),
 			time: 0,
 			player_index: player.index(),
-			num_enemies_pierced: 0,
+			num_piercings: 0,
 		})
 	}
 
-	fn side_effects(&self, player: &mut Player, floor: &Floor) {
+	fn side_effects(&self, player: &mut Player, floor_info: &FloorInfo) {
 		let change = Vec2::new(self.angle.cos(), self.angle.sin()) * PLAYER_SIZE;
 
-		if !floor.collision(player, change) {
+		if !floor_info.floor.collision(player, change) {
 			player.pos += change;
 		}
 	}
 
-	fn update(&mut self, monsters: &mut [Box<dyn Monster>], floor: &Floor) -> bool {
+	fn update(&mut self, floor_info: &mut FloorInfo) -> bool {
 		let movement = Vec2::new(self.angle.cos(), self.angle.sin()) * 6.0;
 
-		if !floor.collision(self, movement) {
+		if !floor_info.floor.collision(self, movement) {
 			self.pos += movement;
 			self.time += 1;
 		} else {
@@ -57,14 +57,15 @@ impl Attack for Slash {
 			return true;
 		}
 
-		if self.num_enemies_pierced >= 2 {
+		if self.num_piercings >= 6 {
 			return true;
 		}
 
 		let aabb = self.as_aabb();
 
 		// Check to see if it's collided with a monster
-		monsters
+		floor_info
+			.monsters
 			.iter_mut()
 			.filter(|m| aabb_collision(&aabb, &m.as_aabb(), Vec2::ZERO))
 			.for_each(|monster| {
@@ -78,9 +79,9 @@ impl Attack for Slash {
 					player: self.player_index,
 				};
 
-				monster.take_damage(damage_info, floor);
+				monster.take_damage(damage_info, &floor_info.floor);
 
-				self.num_enemies_pierced += 1;
+				self.num_piercings += 1;
 			});
 
 		false

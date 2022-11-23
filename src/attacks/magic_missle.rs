@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::draw::Drawable;
-use crate::map::Floor;
+use crate::map::FloorInfo;
 use crate::math::{aabb_collision, get_angle, AsAABB, AxisAlignedBoundingBox};
 use crate::monsters::Monster;
 use crate::player::{DamageInfo, Player};
@@ -22,7 +22,7 @@ pub struct MagicMissile {
 
 impl Attack for MagicMissile {
 	fn new(
-		player: &Player, angle: f32, textures: &HashMap<String, Texture2D>, floor: &Floor,
+		player: &Player, angle: f32, textures: &HashMap<String, Texture2D>, floor: &FloorInfo,
 		_is_primary: bool,
 	) -> Box<Self> {
 		Box::new(Self {
@@ -35,19 +35,19 @@ impl Attack for MagicMissile {
 		})
 	}
 
-	fn side_effects(&self, player: &mut Player, floor: &Floor) {
+	fn side_effects(&self, player: &mut Player, floor_info: &FloorInfo) {
 		// "Knocback" the player a bit
 		let change = -Vec2::new(self.angle.cos(), self.angle.sin()) * 1.5;
 
-		if !floor.collision(player, change) {
+		if !floor_info.floor.collision(player, change) {
 			player.pos += change;
 		}
 	}
 
-	fn update(&mut self, monsters: &mut [Box<dyn Monster>], floor: &Floor) -> bool {
+	fn update(&mut self, floor_info: &mut FloorInfo) -> bool {
 		let movement = Vec2::new(self.angle.cos(), self.angle.sin()) * 5.0;
 
-		if let Some(object) = floor.collision_obj(self, movement) {
+		if let Some(object) = floor_info.floor.collision_obj(self, movement) {
 			let object_center = object.pos() + (object.size() / 2.0);
 
 			self.angle = get_angle(self.pos, object_center);
@@ -68,7 +68,8 @@ impl Attack for MagicMissile {
 		}
 
 		// Check to see if it's collided with a monster
-		if let Some(monster) = monsters
+		if let Some(monster) = floor_info
+			.monsters
 			.iter_mut()
 			.find(|m| aabb_collision(self, &m.as_aabb(), Vec2::ZERO))
 		{
@@ -83,7 +84,7 @@ impl Attack for MagicMissile {
 				direction,
 				player: self.player_index,
 			};
-			monster.take_damage(damage_info, floor);
+			monster.take_damage(damage_info, &floor_info.floor);
 
 			self.angle = get_angle(self.pos, monster.pos());
 			self.pos += Vec2::new(self.angle.cos(), self.angle.sin()) * 5.0;

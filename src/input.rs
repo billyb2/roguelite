@@ -1,16 +1,16 @@
 use std::collections::HashMap;
 
 use crate::attacks::Attack;
-use crate::enchantments::Enchantable;
-use crate::map::Floor;
+use crate::map::FloorInfo;
 use crate::math::get_angle;
-use crate::monsters::Monster;
-use crate::player::{interact_with_door, move_player, player_attack, DoorInteraction, Player};
+use crate::player::{
+	interact_with_door, move_player, pickup_items, player_attack, DoorInteraction, Player,
+};
 use macroquad::prelude::*;
 
 pub fn movement_input(
 	player: &mut Player, attacks: &mut Vec<Box<dyn Attack>>, textures: &HashMap<String, Texture2D>,
-	floor: &mut Floor,
+	floor_info: &mut FloorInfo,
 ) {
 	if player.hp() == 0 {
 		return;
@@ -44,42 +44,32 @@ pub fn movement_input(
 	player.angle = get_angle(mouse_pos, Vec2::ZERO);
 
 	if is_mouse_button_down(MouseButton::Left) {
-		player_attack(player, textures, attacks, floor, true);
+		player_attack(player, textures, attacks, floor_info, true);
 	}
 
 	if is_mouse_button_down(MouseButton::Right) {
-		player_attack(player, textures, attacks, floor, false);
+		player_attack(player, textures, attacks, floor_info, false);
+	}
+
+	if is_key_down(KeyCode::P) {
+		pickup_items(player, &mut floor_info.floor);
 	}
 
 	if x_movement != 0.0 || y_movement != 0.0 {
 		let angle = y_movement.atan2(x_movement);
-		move_player(player, angle, None, floor)
+		move_player(player, angle, None, &floor_info.floor);
 	}
 }
 
 pub fn door_interaction_input(
-	player: &Player, players: &[Player], monsters: &[Box<dyn Monster>], floor: &mut Floor,
+	player: &Player, players: &[Player], floor: &mut FloorInfo,
 	textures: &HashMap<String, Texture2D>,
 ) {
 	if is_key_pressed(KeyCode::O) {
-		interact_with_door(
-			player,
-			players,
-			monsters,
-			DoorInteraction::Opening,
-			floor,
-			textures,
-		);
+		interact_with_door(player, players, DoorInteraction::Opening, floor, textures);
 	}
 
 	if is_key_pressed(KeyCode::C) {
-		interact_with_door(
-			player,
-			players,
-			monsters,
-			DoorInteraction::Closing,
-			floor,
-			textures,
-		);
+		interact_with_door(player, players, DoorInteraction::Closing, floor, textures);
 	}
 }
