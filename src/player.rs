@@ -59,6 +59,7 @@ impl Display for Spell {
 pub struct Player {
 	pub angle: f32,
 	pub pos: Vec2,
+	index: usize,
 	speed: f32,
 	hp: PointInfo,
 	mp: PointInfo,
@@ -76,10 +77,13 @@ pub struct Player {
 
 	pub changing_spell: bool,
 	pub time_til_change_spell: u8,
+
+	pub xp: u32,
+	pub level: u32,
 }
 
 impl Player {
-	pub fn new(class: PlayerClass, pos: Vec2) -> Self {
+	pub fn new(index: usize, class: PlayerClass, pos: Vec2) -> Self {
 		let primary_item = Some(match class {
 			PlayerClass::Warrior => ItemInfo::new(ShortSword),
 			PlayerClass::Wizard => ItemInfo::new(WizardGlove),
@@ -131,6 +135,7 @@ impl Player {
 
 		Self {
 			pos,
+			index,
 			angle: 0.0,
 			speed: 2.2,
 			primary_cooldown: 0,
@@ -144,6 +149,32 @@ impl Player {
 			spells,
 			changing_spell: false,
 			time_til_change_spell: 0,
+			xp: 0,
+			level: 1,
+		}
+	}
+
+	pub fn add_xp(&mut self, xp: u32) {
+		self.xp += xp;
+
+		let xp_to_level_up = match self.level {
+			0 => unimplemented!(),
+			1 => 14,
+			2 => 16,
+			_ => todo!(),
+		};
+
+		if self.xp >= xp_to_level_up {
+			self.xp = 0;
+			self.level += 1;
+
+			self.mp.max_points += 2;
+			self.mp.points += 2;
+
+			self.hp.max_points += 1;
+			self.hp.points += 1;
+
+			println!("Leveled up!");
 		}
 	}
 
@@ -171,6 +202,11 @@ impl Player {
 	#[inline]
 	pub fn spells(&self) -> &[Spell] {
 		&self.spells
+	}
+
+	#[inline]
+	pub fn index(&self) -> usize {
+		self.index
 	}
 }
 
@@ -268,6 +304,12 @@ pub fn player_attack(
 			attacks.push(attack);
 		}
 	}
+}
+
+pub struct DamageInfo {
+	pub damage: u16,
+	pub direction: f32,
+	pub player: usize,
 }
 
 pub enum DoorInteraction {

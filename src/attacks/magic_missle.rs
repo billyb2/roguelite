@@ -4,7 +4,7 @@ use crate::draw::Drawable;
 use crate::map::Floor;
 use crate::math::{aabb_collision, get_angle, AsAABB, AxisAlignedBoundingBox};
 use crate::monsters::Monster;
-use crate::player::Player;
+use crate::player::{DamageInfo, Player};
 use macroquad::prelude::*;
 
 use super::Attack;
@@ -17,6 +17,7 @@ pub struct MagicMissile {
 	texture: Texture2D,
 	time: u16,
 	bounces: u16,
+	player_index: usize,
 }
 
 impl Attack for MagicMissile {
@@ -30,6 +31,7 @@ impl Attack for MagicMissile {
 			texture: *textures.get("magic_missile.webp").unwrap(),
 			time: 0,
 			bounces: 0,
+			player_index: player.index(),
 		})
 	}
 
@@ -74,8 +76,14 @@ impl Attack for MagicMissile {
 			// The damage increases the more the projectile bounces
 			let damage = BASE_DAMAGE.pow((1 + self.bounces).into());
 
-			let damage_direction = get_angle(monster.pos(), self.pos);
-			monster.take_damage(damage, damage_direction, floor);
+			let direction = get_angle(monster.pos(), self.pos);
+
+			let damage_info = DamageInfo {
+				damage,
+				direction,
+				player: self.player_index,
+			};
+			monster.take_damage(damage_info, floor);
 
 			self.angle = get_angle(self.pos, monster.pos());
 			self.pos += Vec2::new(self.angle.cos(), self.angle.sin()) * 5.0;

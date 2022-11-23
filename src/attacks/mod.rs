@@ -32,7 +32,8 @@ pub trait Attack: Drawable + Send + Sync {
 }
 
 pub fn update_attacks(
-	monsters: &mut [Box<dyn Monster>], floor: &Floor, attacks: &mut Vec<Box<dyn Attack>>,
+	monsters: &mut [Box<dyn Monster>], players: &mut [Player], floor: &Floor,
+	attacks: &mut Vec<Box<dyn Attack>>,
 ) {
 	attacks.retain_mut(|attack| !attack.update(monsters, floor));
 }

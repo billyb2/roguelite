@@ -1,11 +1,11 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::draw::Drawable;
 use crate::enchantments::{Enchantable, Enchantment, EnchantmentKind};
 use crate::map::{pos_to_tile, Floor, Object, TILE_SIZE};
 use crate::math::{aabb_collision, get_angle, AsAABB, AxisAlignedBoundingBox};
 use crate::monsters::Monster;
-use crate::player::{damage_player, Player};
+use crate::player::{damage_player, DamageInfo, Player};
 
 use macroquad::prelude::*;
 use macroquad::rand::ChooseRandom;
@@ -36,6 +36,8 @@ pub struct SmallRat {
 	time_til_move: u16,
 	current_path: Option<(Vec<Vec2>, usize)>,
 	enchantments: HashMap<EnchantmentKind, Effect>,
+	// All the players who have damaged me
+	damaged_by: HashSet<usize>,
 	// Gotta keep track of if the target moved, to reset the path
 	current_target: Option<Target>,
 }
@@ -80,6 +82,7 @@ impl Monster for SmallRat {
 			current_path: None,
 			current_target: None,
 			enchantments: HashMap::new(),
+			damaged_by: HashSet::new(),
 		}
 	}
 
@@ -105,26 +108,32 @@ impl Monster for SmallRat {
 		});
 	}
 
-	fn take_damage(&mut self, damage: u16, damage_direction: f32, floor: &Floor) {
-		dbg!(damage);
-		self.health = self.health.saturating_sub(damage);
-		dbg!(self.health);
+	fn take_damage(&mut self, damage_info: DamageInfo, floor: &Floor) {
+		self.health = self.health.saturating_sub(damage_info.damage);
 
 		self.enchantments.iter_mut().for_each(|enchantment| {
 			enchantment.1.frames_left /= 2;
 		});
 
-		let change = Vec2::new(damage_direction.cos(), damage_direction.sin())
+		let change = Vec2::new(damage_info.direction.cos(), damage_info.direction.sin())
 			* Vec2::splat(SIZE)
-			* Vec2::splat((damage as f32 / MAX_HEALTH as f32).clamp(0.0, 0.8));
+			* Vec2::splat((damage_info.damage as f32 / MAX_HEALTH as f32).clamp(0.0, 0.8));
 
 		if !floor.collision(self, change) {
 			self.pos += change;
 		}
+
+		self.damaged_by.insert(damage_info.player);
 	}
 
 	fn living(&self) -> bool {
 		self.health > 0
+	}
+
+	fn xp(&self) -> (&HashSet<usize>, u32) {
+		const DEFAULT_XP: u32 = 1;
+		// Divide the XP between all players
+		(&self.damaged_by, DEFAULT_XP)
 	}
 }
 

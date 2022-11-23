@@ -34,11 +34,12 @@ varying vec2 uv;
 uniform sampler2D Texture;
 uniform lowp vec2 player_pos;
 uniform lowp float lowest_light_level;
+uniform lowp float window_height;
 
 void main() {
     gl_FragColor = texture2D(Texture, uv);
 	vec2 frag_coord = gl_FragCoord.xy;
-	frag_coord.y = 600.0 - gl_FragCoord.y;
+	frag_coord.y = window_height - gl_FragCoord.y;
 
 	float lighting = 1.0 - min(length(frag_coord - player_pos), 400.0) / 400.0;
 	lighting *= lowest_light_level;
@@ -60,7 +61,7 @@ void main() {
 }
 ";
 
-const CAMERA_ZOOM: f32 = 0.0025;
+const CAMERA_ZOOM: f32 = 0.0045;
 
 #[macroquad::main(window_conf)]
 async fn main() {
@@ -104,7 +105,7 @@ async fn main() {
 	let mut attacks = Vec::new();
 
 	let mut map = Map::new(&textures, &mut monsters);
-	let mut players = vec![Player::new(class, map.current_floor().current_spawn())];
+	let mut players = vec![Player::new(0, class, map.current_floor().current_spawn())];
 
 	let mut camera = Camera2D {
 		target: players[0].pos(),
@@ -137,6 +138,7 @@ async fn main() {
 			uniforms: vec![
 				("player_pos".to_string(), UniformType::Float2),
 				("lowest_light_level".to_string(), UniformType::Float1),
+				("window_height".to_string(), UniformType::Float1),
 			],
 			..Default::default()
 		},
@@ -179,7 +181,12 @@ async fn main() {
 
 		trigger_traps(&mut players, map.current_floor_mut());
 		update_cooldowns(&mut players);
-		update_attacks(&mut monsters, map.current_floor(), &mut attacks);
+		update_attacks(
+			&mut monsters,
+			&mut players,
+			map.current_floor(),
+			&mut attacks,
+		);
 		update_monsters(&mut monsters, &mut players, map.current_floor());
 
 		if map.current_floor().should_descend(&players, &monsters) {
@@ -190,6 +197,7 @@ async fn main() {
 		clear_background(BLACK);
 
 		camera.target = players[0].pos();
+		material.set_uniform("window_height", screen_height());
 		camera.zoom.y = -CAMERA_ZOOM * (screen_width() / screen_height());
 		set_camera(&camera);
 

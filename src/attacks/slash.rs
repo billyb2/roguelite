@@ -4,7 +4,7 @@ use crate::draw::Drawable;
 use crate::map::Floor;
 use crate::math::{aabb_collision, get_angle, AsAABB, AxisAlignedBoundingBox};
 use crate::monsters::Monster;
-use crate::player::{Player, PLAYER_SIZE};
+use crate::player::{DamageInfo, Player, PLAYER_SIZE};
 use macroquad::prelude::*;
 
 use super::Attack;
@@ -16,6 +16,7 @@ pub struct Slash {
 	angle: f32,
 	texture: Texture2D,
 	time: u16,
+	player_index: usize,
 }
 
 impl Attack for Slash {
@@ -28,6 +29,7 @@ impl Attack for Slash {
 			angle,
 			texture: *textures.get("slash.webp").unwrap(),
 			time: 0,
+			player_index: player.index(),
 		})
 	}
 
@@ -61,8 +63,14 @@ impl Attack for Slash {
 				// Damage is low bc of hitting enemies multiple times
 				const DAMAGE: u16 = 5;
 
-				let damage_direction = get_angle(monster.pos(), self.pos);
-				monster.take_damage(DAMAGE, damage_direction, floor);
+				let direction = get_angle(monster.pos(), self.pos);
+				let damage_info = DamageInfo {
+					damage: DAMAGE,
+					direction,
+					player: self.player_index,
+				};
+
+				monster.take_damage(damage_info, floor);
 			});
 
 		false
