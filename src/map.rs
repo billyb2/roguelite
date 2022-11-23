@@ -8,6 +8,8 @@ use pathfinding::prelude::*;
 use rayon::prelude::*;
 
 use crate::draw::Drawable;
+use crate::items::ItemInfo;
+use crate::items::ItemType;
 use crate::math::points_on_circumference;
 use crate::math::points_on_line;
 use crate::math::{aabb_collision, AsAABB, AxisAlignedBoundingBox};
@@ -32,12 +34,12 @@ struct Trap {
 	trap_type: TrapType,
 }
 
-#[derive(Copy, Clone)]
 pub struct Object {
 	pos: IVec2,
 	texture: Texture2D,
 	is_floor: bool,
 	has_been_seen: bool,
+	items: Vec<ItemInfo>,
 	door: Option<Door>,
 	trap: Option<Trap>,
 }
@@ -62,6 +64,10 @@ impl Object {
 			Some(door) => !door.is_open,
 			None => true,
 		}
+	}
+
+	pub fn items(&self) -> &[ItemInfo] {
+		&self.items
 	}
 
 	pub fn door(&self) -> &Option<Door> {
@@ -103,14 +109,6 @@ pub struct Door {
 }
 
 impl Door {
-	pub fn pos(&self) -> IVec2 {
-		self.pos
-	}
-
-	pub fn is_open(&self) -> bool {
-		self.is_open
-	}
-
 	pub fn open(&mut self) {
 		self.is_open = true;
 	}
@@ -174,6 +172,7 @@ impl Room {
 					is_floor: false,
 					trap: None,
 					has_been_seen: false,
+					items: Vec::new(),
 					door,
 				}
 			})
@@ -198,12 +197,26 @@ impl Room {
 				false => *textures.get("light_gray.webp").unwrap(),
 			};
 
+			// 1 in every 100 tiles have a 1 in 10 chance of having gold
+			let mut items = Vec::new();
+
+			let pos = IVec2::new(x, y);
+
+			if rand::gen_range(0, 50) == 25 {
+				items.push(ItemInfo::new(
+					ItemType::Gold(rand::gen_range(8, 20)),
+					Some(pos),
+					textures,
+				));
+			}
+
 			Object {
-				pos: IVec2::new(x, y),
+				pos,
 				texture,
 				is_floor: true,
 				has_been_seen: false,
 				door: None,
+				items,
 				trap,
 			}
 		};
@@ -473,6 +486,7 @@ impl Floor {
 						door: None,
 						has_been_seen: false,
 						is_floor: false,
+						items: Vec::new(),
 						trap: None,
 					},
 					Object {
@@ -481,6 +495,7 @@ impl Floor {
 						door: None,
 						has_been_seen: false,
 						is_floor: false,
+						items: Vec::new(),
 						trap: None,
 					},
 				]
@@ -494,6 +509,7 @@ impl Floor {
 						door: None,
 						has_been_seen: false,
 						is_floor: false,
+						items: Vec::new(),
 						trap: None,
 					},
 					Object {
@@ -502,6 +518,7 @@ impl Floor {
 						door: None,
 						has_been_seen: false,
 						is_floor: false,
+						items: Vec::new(),
 						trap: None,
 					},
 				]
@@ -530,6 +547,7 @@ impl Floor {
 						texture: *textures.get("black.webp").unwrap(),
 						is_floor: false,
 						has_been_seen: false,
+						items: Vec::new(),
 						door: None,
 						trap: None,
 					})
@@ -549,6 +567,7 @@ impl Floor {
 				texture: *textures.get("light_gray.webp").unwrap(),
 				door: None,
 				has_been_seen: false,
+				items: Vec::new(),
 				trap: None,
 				is_floor: true,
 			})
@@ -569,8 +588,10 @@ impl Floor {
 
 		// let spawn = (exit_pos * IVec2::splat(TILE_SIZE as i32)).as_vec2() + Vec2::splat(TILE_SIZE as f32);
 
-		let mut objects =
-			vec![MaybeUninit::uninit(); collidable_objects.len() + background_objects.len()];
+		let mut objects: Vec<_> = (0..collidable_objects.len() + background_objects.len())
+			.into_iter()
+			.map(|_| MaybeUninit::uninit())
+			.collect();
 
 		background_objects
 			.into_iter()
@@ -596,6 +617,7 @@ impl Floor {
 				door: None,
 				has_been_seen: false,
 				trap: None,
+				items: Vec::new(),
 				is_floor: true,
 			},
 		}

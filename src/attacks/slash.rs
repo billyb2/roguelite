@@ -17,6 +17,7 @@ pub struct Slash {
 	texture: Texture2D,
 	time: u16,
 	player_index: usize,
+	num_enemies_pierced: u8,
 }
 
 impl Attack for Slash {
@@ -30,6 +31,7 @@ impl Attack for Slash {
 			texture: *textures.get("slash.webp").unwrap(),
 			time: 0,
 			player_index: player.index(),
+			num_enemies_pierced: 0,
 		})
 	}
 
@@ -55,10 +57,16 @@ impl Attack for Slash {
 			return true;
 		}
 
+		if self.num_enemies_pierced >= 2 {
+			return true;
+		}
+
+		let aabb = self.as_aabb();
+
 		// Check to see if it's collided with a monster
 		monsters
 			.iter_mut()
-			.filter(|m| aabb_collision(self, &m.as_aabb(), Vec2::ZERO))
+			.filter(|m| aabb_collision(&aabb, &m.as_aabb(), Vec2::ZERO))
 			.for_each(|monster| {
 				// Damage is low bc of hitting enemies multiple times
 				const DAMAGE: u16 = 5;
@@ -71,6 +79,8 @@ impl Attack for Slash {
 				};
 
 				monster.take_damage(damage_info, floor);
+
+				self.num_enemies_pierced += 1;
 			});
 
 		false

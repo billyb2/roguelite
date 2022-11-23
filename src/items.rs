@@ -3,7 +3,8 @@ use std::{collections::HashMap, fmt::Display};
 
 use crate::{
 	attacks::{Attack, BlindingLight, MagicMissile, Slash},
-	map::Floor,
+	draw::Drawable,
+	map::{Floor, TILE_SIZE},
 	player::{Player, Spell},
 };
 
@@ -18,14 +19,21 @@ pub enum ItemType {
 pub struct ItemInfo {
 	cursed: bool,
 	item_type: ItemType,
+	// If there is no pos, it's in the player's inventory
+	tile_pos: Option<IVec2>,
+	texture: Texture2D,
 }
 
 impl ItemInfo {
 	// Creates a default item
-	pub fn new(item_type: ItemType) -> Self {
+	pub fn new(
+		item_type: ItemType, tile_pos: Option<IVec2>, textures: &HashMap<String, Texture2D>,
+	) -> Self {
 		Self {
 			cursed: false,
 			item_type,
+			tile_pos,
+			texture: *textures.get("gold.webp").unwrap(),
 		}
 	}
 
@@ -79,5 +87,20 @@ pub fn attack_with_item(
 			attack
 		}),
 		ItemType::Gold(_) => None,
+	}
+}
+
+impl Drawable for ItemInfo {
+	fn size(&self) -> Vec2 {
+		Vec2::splat(32.0)
+	}
+
+	fn pos(&self) -> Vec2 {
+		(self.tile_pos.unwrap_or(IVec2::ZERO) * IVec2::splat(TILE_SIZE as i32)).as_vec2()
+			+ self.size() / 2.0
+	}
+
+	fn texture(&self) -> Option<Texture2D> {
+		Some(self.texture)
 	}
 }

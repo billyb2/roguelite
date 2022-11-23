@@ -19,6 +19,20 @@ pub enum PlayerClass {
 	Wizard,
 }
 
+pub struct PlayerClassError;
+
+impl TryFrom<&str> for PlayerClass {
+	type Error = PlayerClassError;
+
+	fn try_from(value: &str) -> Result<Self, Self::Error> {
+		match value {
+			"Warrior" => Ok(PlayerClass::Warrior),
+			"Wizard" => Ok(PlayerClass::Wizard),
+			_ => Err(PlayerClassError),
+		}
+	}
+}
+
 /// Info regarding points such as HP or MP
 #[derive(Debug)]
 struct PointInfo {
@@ -83,10 +97,12 @@ pub struct Player {
 }
 
 impl Player {
-	pub fn new(index: usize, class: PlayerClass, pos: Vec2) -> Self {
+	pub fn new(
+		index: usize, class: PlayerClass, pos: Vec2, textures: &HashMap<String, Texture2D>,
+	) -> Self {
 		let primary_item = Some(match class {
-			PlayerClass::Warrior => ItemInfo::new(ShortSword),
-			PlayerClass::Wizard => ItemInfo::new(WizardGlove),
+			PlayerClass::Warrior => ItemInfo::new(ShortSword, None, textures),
+			PlayerClass::Wizard => ItemInfo::new(WizardGlove, None, textures),
 		});
 
 		let hp = match class {

@@ -44,7 +44,7 @@ void main() {
 
 	float lighting = 1.0 - min(length(gl_FragCoord.xy - player_pos), VISION_SIZE) / VISION_SIZE;
 	lighting *= lowest_light_level;
-	gl_FragColor.rgb *= vec3(lighting * 0.8);
+	gl_FragColor.rgb *= vec3(lighting * 0.75);
 
 }
 ";
@@ -81,10 +81,9 @@ async fn main() {
 
 	let class = match class.is_empty() {
 		true => PlayerClass::Warrior,
-		false => match class.as_str() {
-			"warrior" => PlayerClass::Warrior,
-			"wizard" | "." => PlayerClass::Wizard,
-			c => panic!("Invalid class given: {c}"),
+		false => match class.as_str().try_into() {
+			Ok(class) => class,
+			Err(_) => panic!("Invalid class given: {class}"),
 		},
 	};
 
@@ -108,7 +107,12 @@ async fn main() {
 	let mut attacks = Vec::new();
 
 	let mut map = Map::new(&textures, &mut monsters);
-	let mut players = vec![Player::new(0, class, map.current_floor().current_spawn())];
+	let mut players = vec![Player::new(
+		0,
+		class,
+		map.current_floor().current_spawn(),
+		&textures,
+	)];
 
 	let mut camera = Camera2D {
 		target: players[0].pos(),
@@ -239,6 +243,13 @@ async fn main() {
 		material.set_uniform("lowest_light_level", 0.65_f32);
 
 		let visible_objects = map.current_floor().visible_objects(&players[0], None);
+
+		visible_objects
+			.iter()
+			.flat_map(|o| o.items().iter())
+			.for_each(|i| {
+				i.draw();
+			});
 
 		let only_show_past_seen_objects = |obj: &&Object| -> bool {
 			let is_currently_visible = visible_objects
