@@ -10,6 +10,7 @@ use crate::draw::Drawable;
 use crate::draw::Textures;
 use crate::items::ItemInfo;
 use crate::items::ItemType;
+use crate::math::aabb_collision_dir;
 use crate::math::points_on_circumference;
 use crate::math::points_on_line;
 use crate::math::{aabb_collision, AsAABB, AxisAlignedBoundingBox};
@@ -668,6 +669,26 @@ impl Floor {
 		self.collision_obj(aabb, distance).is_some()
 	}
 
+	pub fn collision_dir<A: AsAABB>(&self, aabb: &A, distance: Vec2) -> BVec2 {
+		self.objects
+			.iter()
+			.filter_map(|object| {
+				if object.is_collidable() {
+					let collision_info = aabb_collision_dir(aabb, object, distance);
+
+					if collision_info.any() {
+						Some(collision_info)
+					} else {
+						None
+					}
+				} else {
+					None
+				}
+			})
+			.fold(BVec2::splat(false), |collision_info, obj_collision_info| {
+				collision_info | obj_collision_info
+			})
+	}
 	pub fn doors(&mut self) -> impl Iterator<Item = &mut Object> {
 		self.objects.iter_mut().filter(|obj| obj.door.is_some())
 	}
@@ -891,7 +912,7 @@ pub fn distance_squared(pos1: IVec2, pos2: IVec2) -> i32 {
 pub fn pos_to_tile(obj: &dyn AsAABB) -> IVec2 {
 	let center = obj.center();
 
-	(center / Vec2::splat(TILE_SIZE as f32)).round().as_ivec2()
+	(center / Vec2::splat(TILE_SIZE as f32)).floor().as_ivec2()
 }
 
 pub fn trigger_traps(players: &mut [Player], floor_info: &mut FloorInfo) {

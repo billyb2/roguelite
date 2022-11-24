@@ -63,6 +63,26 @@ pub fn aabb_collision<A: AsAABB, B: AsAABB>(aabb1: &A, aabb2: &B, distance: Vec2
 	obj1_min.cmplt(obj2_max).all() && obj2_min.cmplt(obj1_max).all()
 }
 
+pub fn aabb_collision_dir<A: AsAABB, B: AsAABB>(aabb1: &A, aabb2: &B, distance: Vec2) -> BVec2 {
+	let mut obj1 = aabb1.as_aabb();
+	let obj2 = aabb2.as_aabb();
+
+	let obj1_pos_x = obj1.pos + Vec2::new(distance.x, 0.0);
+	let obj1_pos_y = obj1.pos + Vec2::new(0.0, distance.y);
+
+	let check_collision = |obj1_pos: Vec2| -> bool {
+		let obj1_min = obj1_pos;
+		let obj1_max = obj1_pos + obj1.size;
+
+		let obj2_min = obj2.pos;
+		let obj2_max = obj2.pos + obj2.size;
+
+		obj1_min.cmplt(obj2_max).all() && obj2_min.cmplt(obj1_max).all()
+	};
+
+	BVec2::new(check_collision(obj1_pos_x), check_collision(obj1_pos_y))
+}
+
 /// Bresenhams Circle Algorithm
 pub fn points_on_circumference(center: IVec2, radius: i32) -> Vec<IVec2> {
 	// Distance from center

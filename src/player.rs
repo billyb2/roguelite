@@ -241,8 +241,13 @@ pub fn move_player(player: &mut Player, angle: f32, speed: Option<Vec2>, floor_i
 	let direction: Vec2 = (angle.cos(), angle.sin()).into();
 	let distance = direction * speed.unwrap_or_else(|| Vec2::splat(player.speed));
 
-	if !floor_info.collision(player, distance) {
-		player.pos += distance;
+	let collision_info = floor_info.collision_dir(player, distance);
+	if !collision_info.x {
+		player.pos.x += distance.x;
+	}
+
+	if !collision_info.y {
+		player.pos.y += distance.y;
 	}
 }
 
@@ -384,16 +389,11 @@ pub fn interact_with_door<A: AsAABB>(
 			};
 
 			if door_will_be_affected && door2_will_be_affected {
-				let door_distance = (door_obj.tile_pos() * IVec2::splat(TILE_SIZE as i32))
-					.as_vec2()
-					.distance_squared(entity.center());
-				let door2_distance = (door2_obj.tile_pos() * IVec2::splat(TILE_SIZE as i32))
-					.as_vec2()
-					.distance_squared(entity.center());
-
-				match door_distance < door2_distance {
-					true => door_obj,
-					false => door2_obj,
+				// Check which door the plyer is touching
+				if aabb_collision(door_obj, entity, Vec2::ZERO) {
+					door_obj
+				} else {
+					door2_obj
 				}
 			} else if door_will_be_affected {
 				door_obj
