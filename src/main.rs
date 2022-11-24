@@ -84,7 +84,7 @@ pub static TEXTURES: Lazy<Textures> = Lazy::new(|| {
 		.collect()
 });
 
-pub const NUM_PLAYERS: usize = 1;
+pub const NUM_PLAYERS: usize = 2;
 
 #[macroquad::main(window_conf)]
 async fn main() {
@@ -100,7 +100,7 @@ async fn main() {
 	class.pop();
 
 	let class = match class.is_empty() {
-		true => PlayerClass::Warrior,
+		true => PlayerClass::Wizard,
 		false => match class.as_str().try_into() {
 			Ok(class) => class,
 			Err(_) => panic!("Invalid class given: {class}"),

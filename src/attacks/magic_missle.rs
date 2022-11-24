@@ -1,8 +1,6 @@
-
-
 use crate::draw::{Drawable, Textures};
 use crate::map::FloorInfo;
-use crate::math::{aabb_collision, get_angle, AsAABB, AxisAlignedBoundingBox};
+use crate::math::{aabb_collision, aabb_collision_dir, get_angle, AsAABB, AxisAlignedBoundingBox};
 use crate::player::{DamageInfo, Player};
 use macroquad::prelude::*;
 
@@ -43,34 +41,30 @@ impl Attack for MagicMissile {
 	}
 
 	fn update(&mut self, floor_info: &mut FloorInfo) -> bool {
-		let movement = Vec2::new(self.angle.cos(), self.angle.sin()) * 5.0;
+		let mut movement = Vec2::new(self.angle.cos(), self.angle.sin()) * 5.0;
 
-		if let Some(object) = floor_info.floor.collision_obj(self, movement) {
-			let object_center = object.pos() + (object.size() / 2.0);
+		let collision_info = floor_info.floor.collision_dir(self, movement);
 
-			self.angle = get_angle(self.pos, object_center);
-			self.pos += Vec2::new(self.angle.cos(), self.angle.sin()) * 5.0;
-
-			self.bounces += 1;
-
-			if self.bounces > 3 {
-				self.bounces = 3;
-			}
-		} else {
-			self.pos += movement;
-			self.time += 1;
+		if collision_info.x {
+			movement.x = -movement.x;
+			self.angle = get_angle(movement, Vec2::ZERO);
 		}
 
-		if self.time >= 60 {
-			return true;
+		if collision_info.y {
+			movement.y = -movement.y;
+			self.angle = get_angle(movement, Vec2::ZERO);
 		}
 
 		// Check to see if it's collided with a monster
-		if let Some(monster) = floor_info
-			.monsters
-			.iter_mut()
-			.find(|m| aabb_collision(self, &m.as_aabb(), Vec2::ZERO))
-		{
+		if let Some((monster, collision_info)) = floor_info.monsters.iter_mut().find_map(|m| {
+			let collision_info = aabb_collision_dir(self, &m.as_aabb(), Vec2::ZERO);
+
+			if collision_info.any() {
+				Some((m, collision_info))
+			} else {
+				None
+			}
+		}) {
 			const BASE_DAMAGE: u16 = 4;
 			// The damage increases the more the projectile bounces
 			let damage = BASE_DAMAGE.pow((1 + self.bounces).into());
@@ -84,8 +78,22 @@ impl Attack for MagicMissile {
 			};
 			monster.take_damage(damage_info, &floor_info.floor);
 
-			self.angle = get_angle(self.pos, monster.pos());
-			self.pos += Vec2::new(self.angle.cos(), self.angle.sin()) * 5.0;
+			if collision_info.x {
+				movement.x = -movement.x;
+				self.angle = get_angle(movement, Vec2::ZERO);
+			}
+
+			if collision_info.y {
+				movement.y = -movement.y;
+				self.angle = get_angle(movement, Vec2::ZERO);
+			}
+		}
+
+		self.pos += movement;
+		self.time += 1;
+
+		if self.time >= 60 {
+			return true;
 		}
 
 		false
