@@ -110,6 +110,11 @@ impl Player {
 			PlayerClass::Wizard => ItemInfo::new(WizardGlove, None),
 		});
 
+		let secondary_item = match class {
+			PlayerClass::Wizard => Some(ItemInfo::new(WizardsDagger, None)),
+			_ => None,
+		};
+
 		let hp = match class {
 			PlayerClass::Wizard => PointInfo {
 				points: 20,
@@ -166,7 +171,7 @@ impl Player {
 			willpower,
 			invincibility_frames: 0,
 			primary_item,
-			secondary_item: None,
+			secondary_item,
 			spells,
 			changing_spell: false,
 			time_til_change_spell: 0,

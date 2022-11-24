@@ -1,6 +1,7 @@
 mod blinding_light;
 mod magic_missle;
 mod slash;
+mod stab;
 
 use crate::draw::{Drawable, Textures};
 use crate::map::FloorInfo;
@@ -10,6 +11,7 @@ use crate::player::Player;
 pub use blinding_light::*;
 pub use magic_missle::*;
 pub use slash::*;
+pub use stab::*;
 
 use macroquad::prelude::*;
 

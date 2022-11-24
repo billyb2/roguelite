@@ -1,8 +1,8 @@
 use macroquad::prelude::*;
-use std::{fmt::Display};
+use std::fmt::Display;
 
 use crate::{
-	attacks::{Attack, BlindingLight, MagicMissile, Slash},
+	attacks::{Attack, BlindingLight, MagicMissile, Slash, Stab},
 	draw::{Drawable, Textures},
 	map::{FloorInfo, TILE_SIZE},
 	math::{AsAABB, AxisAlignedBoundingBox},
@@ -13,6 +13,7 @@ use crate::{
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub enum ItemType {
 	ShortSword,
+	WizardsDagger,
 	WizardGlove,
 	Gold(u32),
 }
@@ -39,6 +40,7 @@ impl ItemInfo {
 		let mut description = match self.item_type {
 			ItemType::WizardGlove => "A glove wielded by mighty sorcerers. Thiey alow magic users to directly tough the energy around them and manipulate it to their will.",
 			ItemType::ShortSword => "A sturdy short sword, passed down from many generations.",
+			ItemType::WizardsDagger => "A dagger engraved with mystical runes",
 			ItemType::Gold(_) => "Gold! Currency! Can be used at shops to purchase items",
 		}.to_string();
 
@@ -55,6 +57,7 @@ impl Display for ItemInfo {
 		f.write_str(&match self.item_type {
 			ItemType::ShortSword => "Short Sword".to_string(),
 			ItemType::WizardGlove => "Wizard's Glove".to_string(),
+			ItemType::WizardsDagger => "Wizard's Dagger".to_string(),
 			ItemType::Gold(amt) => format!("{amt} gold"),
 		})
 	}
@@ -66,6 +69,13 @@ pub fn attack_with_item(
 ) -> Option<Box<dyn Attack>> {
 	match item.item_type {
 		ItemType::ShortSword => Some(Slash::new(
+			player,
+			player.angle,
+			textures,
+			floor,
+			primary_attack,
+		)),
+		ItemType::WizardsDagger => Some(Stab::new(
 			player,
 			player.angle,
 			textures,
