@@ -49,23 +49,18 @@ pub trait AsAABB {
 }
 
 pub fn aabb_collision<A: AsAABB, B: AsAABB>(aabb1: &A, aabb2: &B, distance: Vec2) -> bool {
-	const TWO: Vec2 = Vec2::splat(2.0);
-
 	let mut obj1 = aabb1.as_aabb();
 	let obj2 = aabb2.as_aabb();
 
 	obj1.pos += distance;
 
-	let half_obj1_size = obj1.size / TWO;
-	let half_obj2_size = obj2.size / TWO;
+	let obj1_min = obj1.pos;
+	let obj1_max = obj1.pos + obj1.size;
 
-	let obj1_min = obj1.pos - half_obj1_size;
-	let obj1_max = obj1.pos + half_obj1_size;
+	let obj2_min = obj2.pos;
+	let obj2_max = obj2.pos + obj2.size;
 
-	let obj2_min = obj2.pos - half_obj2_size;
-	let obj2_max = obj2.pos + half_obj2_size;
-
-	obj1_min.cmple(obj2_max).all() && obj2_min.cmple(obj1_max).all()
+	obj1_min.cmplt(obj2_max).all() && obj2_min.cmplt(obj1_max).all()
 }
 
 /// Bresenhams Circle Algorithm
