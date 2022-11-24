@@ -1,17 +1,17 @@
-
-
 use crate::attacks::Attack;
 use crate::draw::Textures;
 use crate::map::FloorInfo;
-use crate::math::get_angle;
+use crate::math::{get_angle, AsAABB};
 use crate::player::{
 	interact_with_door, move_player, pickup_items, player_attack, DoorInteraction, Player,
 };
+use crate::NUM_PLAYERS;
+use gilrs::{Axis, Button, Gamepad};
 use macroquad::prelude::*;
 
 pub fn movement_input(
 	player: &mut Player, attacks: &mut Vec<Box<dyn Attack>>, textures: &Textures,
-	floor_info: &mut FloorInfo,
+	floor_info: &mut FloorInfo, camera: &Camera2D,
 ) {
 	if player.hp() == 0 {
 		return;
@@ -41,8 +41,21 @@ pub fn movement_input(
 		player.time_til_change_spell = 15;
 	}
 
-	let mouse_pos = mouse_position_local();
-	player.angle = get_angle(mouse_pos, Vec2::ZERO);
+	let mouse_pos: Vec2 = mouse_position().into();
+
+	player.angle = get_angle(
+		mouse_pos,
+		match NUM_PLAYERS == 1 {
+			true => camera.world_to_screen(player.center()),
+			false => {
+				camera.world_to_screen(player.center())
+					+ Vec2::new(
+						0.0,
+						(camera.viewport.unwrap().3 as f32) * (1.0 / NUM_PLAYERS as f32),
+					)
+			},
+		},
+	);
 
 	if is_mouse_button_down(MouseButton::Left) {
 		player_attack(player, textures, attacks, floor_info, true);
@@ -62,6 +75,50 @@ pub fn movement_input(
 	}
 }
 
+pub fn movement_input_controller(
+	player: &mut Player, attacks: &mut Vec<Box<dyn Attack>>, textures: &Textures,
+	floor_info: &mut FloorInfo, gamepad: &Gamepad,
+) {
+	let x_movement = gamepad
+		.axis_data(Axis::LeftStickX)
+		.map(|a| a.value())
+		.unwrap_or_default();
+
+	let y_movement = -gamepad
+		.axis_data(Axis::LeftStickY)
+		.map(|a| a.value())
+		.unwrap_or_default();
+
+	if x_movement.abs() > f32::EPSILON || y_movement.abs() > f32::EPSILON {
+		let angle = y_movement.atan2(x_movement);
+		move_player(player, angle, None, &floor_info.floor);
+	}
+
+	let x_movement_r = gamepad
+		.axis_data(Axis::RightStickX)
+		.map(|a| a.value())
+		.unwrap_or_default();
+
+	let y_movement_r = -gamepad
+		.axis_data(Axis::RightStickY)
+		.map(|a| a.value())
+		.unwrap_or_default();
+
+	player.angle = y_movement_r.atan2(x_movement_r);
+
+	if let Some(button_data) = gamepad.button_data(Button::LeftTrigger2) {
+		if button_data.is_pressed() {
+			player_attack(player, textures, attacks, floor_info, false);
+		}
+	}
+
+	if let Some(button_data) = gamepad.button_data(Button::RightTrigger2) {
+		if button_data.is_pressed() {
+			player_attack(player, textures, attacks, floor_info, true);
+		}
+	}
+}
+
 pub fn door_interaction_input(
 	player: &Player, players: &[Player], floor: &mut FloorInfo, textures: &Textures,
 ) {
@@ -71,5 +128,16 @@ pub fn door_interaction_input(
 
 	if is_key_pressed(KeyCode::C) {
 		interact_with_door(player, players, DoorInteraction::Closing, floor, textures);
+	}
+}
+
+pub fn door_interaction_input_controller(
+	player: &Player, players: &[Player], floor: &mut FloorInfo, textures: &Textures,
+	gamepad: &Gamepad,
+) {
+	if let Some(button_data) = gamepad.button_data(Button::South) {
+		if button_data.is_pressed() {
+			interact_with_door(player, players, DoorInteraction::Opening, floor, textures);
+		}
 	}
 }

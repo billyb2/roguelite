@@ -1,4 +1,3 @@
-
 use std::mem::MaybeUninit;
 
 use macroquad::prelude::*;
@@ -35,6 +34,7 @@ struct Trap {
 	trap_type: TrapType,
 }
 
+#[derive(Clone)]
 pub struct Object {
 	pos: IVec2,
 	texture: Texture2D,

@@ -25,7 +25,7 @@ enum Target {
 }
 
 const SIZE: f32 = 18.0;
-const MAX_HEALTH: u16 = 35;
+const MAX_HEALTH: u16 = 22;
 
 pub struct SmallRat {
 	health: u16,
@@ -298,7 +298,7 @@ fn attack_mode(my_monster: &mut SmallRat, players: &[Player], floor: &Floor) {
 		}
 	};
 
-	step_pathfinding(my_monster, players, floor, 1.2, find_target);
+	step_pathfinding(my_monster, players, floor, 1.1, find_target);
 
 	if let Some(Target::PlayerIndex(i)) = my_monster.current_target {
 		let target_player = &players[i];

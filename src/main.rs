@@ -8,13 +8,13 @@ mod math;
 mod monsters;
 mod player;
 
-
 use std::fs;
 use std::io::{self, Write};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use attacks::*;
 use draw::*;
+use gilrs::Gilrs;
 use input::*;
 use macroquad::miniquad::{BlendFactor, BlendState, BlendValue, Equation};
 use map::*;
@@ -26,7 +26,7 @@ use macroquad::prelude::*;
 use macroquad::ui::{root_ui, Skin};
 use once_cell::sync::Lazy;
 
-use rayon::prelude::*;
+use crate::math::AsAABB;
 
 pub const MAX_VIEW_OF_PLAYER: f32 = 200.0;
 
@@ -35,7 +35,6 @@ const DEFAULT_FRAGMENT_SHADER: &str = "
 precision lowp float;
 varying vec2 uv;
 uniform sampler2D Texture;
-uniform lowp vec2 player_pos;
 uniform lowp float lowest_light_level;
 uniform lowp float window_height;
 const lowp float VISION_SIZE = 400.0;
@@ -43,7 +42,7 @@ const lowp float VISION_SIZE = 400.0;
 void main() {
     gl_FragColor = texture2D(Texture, uv);
 
-	float lighting = 1.0 - min(length(gl_FragCoord.xy - player_pos), VISION_SIZE) / VISION_SIZE;
+	float lighting = 1.0;
 	lighting *= lowest_light_level;
 	gl_FragColor.rgb *= vec3(lighting * 0.75);
 
@@ -85,6 +84,8 @@ pub static TEXTURES: Lazy<Textures> = Lazy::new(|| {
 		.collect()
 });
 
+pub const NUM_PLAYERS: usize = 1;
+
 #[macroquad::main(window_conf)]
 async fn main() {
 	let time = SystemTime::elapsed(&UNIX_EPOCH).unwrap().as_secs();
@@ -109,21 +110,35 @@ async fn main() {
 	let mut attacks = Vec::new();
 
 	let mut map = Map::new(&TEXTURES);
-	let mut players = vec![Player::new(
-		0,
-		class,
-		map.current_floor().current_spawn(),
-		&TEXTURES,
-	)];
 
-	let mut camera = Camera2D {
-		target: players[0].pos(),
-		zoom: Vec2::new(
-			CAMERA_ZOOM,
-			-CAMERA_ZOOM * (screen_width() / screen_height()),
-		),
-		..Default::default()
-	};
+	let mut players: Vec<_> = (0..NUM_PLAYERS)
+		.into_iter()
+		.map(|i| Player::new(i, class, map.current_floor().current_spawn(), &TEXTURES))
+		.collect();
+
+	let mut viewport_screen_height = screen_height() * (1.0 / NUM_PLAYERS as f32);
+
+	let mut cameras: Vec<Camera2D> = players
+		.iter()
+		.enumerate()
+		.map(|(i, p)| Camera2D {
+			target: p.center(),
+			zoom: Vec2::new(
+				CAMERA_ZOOM,
+				-CAMERA_ZOOM * (screen_width() / viewport_screen_height),
+			) * 0.7,
+			viewport: Some((
+				0,
+				viewport_screen_height as i32 * i as i32,
+				screen_width() as i32,
+				viewport_screen_height as i32,
+			)),
+			..Default::default()
+		})
+		.collect();
+
+	let mut gilrs = Gilrs::new().unwrap();
+	let mut active_gamepad = None;
 
 	const SHOW_FRAMERATE: bool = true;
 
@@ -150,7 +165,6 @@ async fn main() {
 		MaterialParams {
 			pipeline_params,
 			uniforms: vec![
-				("player_pos".to_string(), UniformType::Float2),
 				("lowest_light_level".to_string(), UniformType::Float1),
 				("window_height".to_string(), UniformType::Float1),
 			],
@@ -167,7 +181,18 @@ async fn main() {
 
 	root_ui().push_skin(&skin);
 
+	let mut visible_objects: Vec<Vec<Object>> = Vec::new();
 	loop {
+		while let Some(gilrs::Event {
+			id,
+			event: _,
+			time: _,
+		}) = gilrs.next_event()
+		{
+			active_gamepad = Some(id);
+		}
+
+		viewport_screen_height = screen_height() * (1.0 / NUM_PLAYERS as f32);
 		frames_till_update_framerate -= 1;
 
 		// If running at more than 60 fps, slow down
@@ -177,7 +202,28 @@ async fn main() {
 			&mut attacks,
 			&TEXTURES,
 			map.current_floor_mut(),
+			&cameras[0],
 		);
+
+		if let Some(gamepad_id) = active_gamepad {
+			let gamepad = gilrs.gamepad(gamepad_id);
+
+			movement_input_controller(
+				&mut players[1],
+				&mut attacks,
+				&TEXTURES,
+				map.current_floor_mut(),
+				&gamepad,
+			);
+
+			door_interaction_input_controller(
+				&players[1],
+				&players,
+				map.current_floor_mut(),
+				&TEXTURES,
+				&gamepad,
+			)
+		}
 
 		door_interaction_input(&players[0], &players, map.current_floor_mut(), &TEXTURES);
 
@@ -193,110 +239,129 @@ async fn main() {
 		// Rendering
 		clear_background(BLACK);
 
-		camera.target = players[0].pos();
-		material.set_uniform("window_height", screen_height());
-		camera.zoom.y = -CAMERA_ZOOM * (screen_width() / screen_height());
-		set_camera(&camera);
+		material.set_uniform("window_height", cameras[0].viewport.unwrap().3 as f32);
 
-		material.set_uniform("player_pos", camera.world_to_screen(players[0].pos));
+		visible_objects.clear();
 
-		gl_use_material(material);
-
-		// Draw all visible objects
-		let current_floor_info = map.current_floor_mut();
-
-		let monsters = &current_floor_info.monsters;
-		let floor = &mut current_floor_info.floor;
-
-		let visible_objects = Floor::visible_objects_mut(&players[0], None, floor.objects_mut());
-
-		material.set_uniform("lowest_light_level", 1.0_f32);
-
-		visible_objects.iter().for_each(|o| {
-			o.draw();
+		players.iter().for_each(|player| {
+			visible_objects.push(
+				Floor::visible_objects_mut(
+					player,
+					None,
+					map.current_floor_mut().floor.objects_mut(),
+				)
+				.into_iter()
+				.cloned()
+				.collect(),
+			)
 		});
-
-		// Draw all monsters on top of a visible object tile
-		monsters
-			.iter()
-			.filter(|m| {
-				let monster_tile_pos = pos_to_tile(&m.as_aabb());
-				let should_be_drawn = visible_objects
-					.iter()
-					.any(|obj| obj.tile_pos() == monster_tile_pos);
-
-				should_be_drawn
-			})
-			.for_each(|m| m.draw());
-
-		material.set_uniform("lowest_light_level", 0.65_f32);
-
-		let visible_objects = map.current_floor().floor.visible_objects(&players[0], None);
-
-		visible_objects
-			.iter()
-			.flat_map(|o| o.items().iter())
-			.for_each(|i| {
-				i.draw();
-			});
 
 		let only_show_past_seen_objects = |obj: &&Object| -> bool {
 			let is_currently_visible = visible_objects
 				.iter()
+				.flatten()
 				.any(|v_obj| v_obj.tile_pos() == obj.tile_pos());
 
 			obj.has_been_seen() && !is_currently_visible
 		};
 
 		// Draw all objects that have been seen
-		map.current_floor()
+		let seen_objects = map
+			.current_floor()
 			.floor
 			.objects()
-			.par_iter()
-			.filter(only_show_past_seen_objects)
-			.collect::<Vec<&Object>>()
-			.into_iter()
-			.for_each(|o| {
-				o.draw();
+			.iter()
+			.filter(only_show_past_seen_objects);
+
+		let monsters_to_draw = map.current_floor().monsters.iter().filter(|m| {
+			let monster_tile_pos = pos_to_tile(&m.as_aabb());
+			visible_objects
+				.iter()
+				.flatten()
+				.any(|obj| obj.tile_pos() == monster_tile_pos)
+		});
+
+		cameras
+			.iter_mut()
+			.zip(players.iter())
+			.enumerate()
+			.for_each(|(i, (camera, player))| {
+				camera.target = player.center();
+
+				camera.zoom = Vec2::new(
+					CAMERA_ZOOM,
+					-CAMERA_ZOOM * (screen_width() / viewport_screen_height),
+				) * 0.7;
+				camera.viewport = Some((
+					0,
+					viewport_screen_height as i32 * i as i32,
+					screen_width() as i32,
+					viewport_screen_height as i32,
+				));
+
+				set_camera(camera);
+
+				gl_use_material(material);
+				material.set_uniform("lowest_light_level", 0.6_f32);
+
+				visible_objects.iter().flatten().for_each(|o| {
+					o.draw();
+				});
+
+				// Draw all monsters on top of a visible object tile
+				monsters_to_draw.clone().for_each(|m| m.draw());
+
+				material.set_uniform("lowest_light_level", 0.25_f32);
+
+				seen_objects.clone().for_each(|o| {
+					o.draw();
+				});
+
+				map.current_floor().exit().draw();
+
+				material.set_uniform("lowest_light_level", 1.0_f32);
+
+				attacks.iter().for_each(|a| a.draw());
+
+				gl_use_default_material();
+				players.iter().for_each(|p| p.draw());
+
+				root_ui().label(
+					Vec2::new(
+						(camera.viewport.unwrap().2 - 150) as f32,
+						camera.viewport.unwrap().1 as f32,
+					),
+					&format!("HP: {}", player.hp()),
+				);
+				root_ui().label(
+					Vec2::new(
+						(camera.viewport.unwrap().2 - 150) as f32,
+						(camera.viewport.unwrap().1 + 10) as f32,
+					),
+					&format!("MP: {}", player.mp()),
+				);
+
+				if let Some(spell) = player.spells().first() {
+					root_ui().label(
+						Vec2::new(
+							(camera.viewport.unwrap().2 - 150) as f32,
+							(camera.viewport.unwrap().1 + 20) as f32,
+						),
+						&match player.changing_spell {
+							false => format!("Spell: {}", spell),
+							true => "Cycling Spell...".to_string(),
+						},
+					);
+				}
 			});
 
-		map.current_floor().exit().draw();
-
-		material.set_uniform("lowest_light_level", 1.0_f32);
-
-		attacks.iter().for_each(|a| a.draw());
-
-		gl_use_default_material();
-
-		players.iter().for_each(|p| p.draw());
-
 		root_ui().label(Vec2::ZERO, &fps.to_string());
-		root_ui().label(
-			Vec2::new(screen_width() - 100.0, 0.0),
-			&format!("HP: {}", players[0].hp()),
-		);
-		root_ui().label(
-			Vec2::new(screen_width() - 100.0, 10.0),
-			&format!("MP: {}", players[0].mp()),
-		);
-
-		if !players[0].spells().is_empty() {
-			root_ui().label(
-				Vec2::new(screen_width() - 150.0, 20.0),
-				&match players[0].changing_spell {
-					false => format!("Spell: {}", players[0].spells()[0]),
-					true => "Cycling Spell...".to_string(),
-				},
-			);
-		}
-
 		if SHOW_FRAMERATE && frames_till_update_framerate == 0 {
 			let frame_time = get_frame_time();
 
 			fps = (1.0 / frame_time).round();
 			frames_till_update_framerate = 30;
 		}
-
 		next_frame().await
 	}
 }
