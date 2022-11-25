@@ -127,7 +127,7 @@ pub fn door_interaction_input(
 	}
 
 	if is_key_pressed(KeyCode::C) {
-		interact_with_door(player, players, DoorInteraction::Closing, floor, textures);
+		interact_with_door(player, players, DoorInteraction::Toggle, floor, textures);
 	}
 }
 

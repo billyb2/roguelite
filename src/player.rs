@@ -344,6 +344,7 @@ pub struct DamageInfo {
 pub enum DoorInteraction {
 	Opening,
 	Closing,
+	Toggle,
 }
 
 pub fn interact_with_door<A: AsAABB>(
@@ -381,11 +382,13 @@ pub fn interact_with_door<A: AsAABB>(
 			let door_will_be_affected = match door_interaction {
 				DoorInteraction::Opening => !door.is_open,
 				DoorInteraction::Closing => door.is_open,
+				DoorInteraction::Toggle => true,
 			};
 
 			let door2_will_be_affected = match door_interaction {
 				DoorInteraction::Opening => !door2.is_open,
 				DoorInteraction::Closing => door2.is_open,
+				DoorInteraction::Toggle => true,
 			};
 
 			if door_will_be_affected && door2_will_be_affected {
@@ -402,10 +405,14 @@ pub fn interact_with_door<A: AsAABB>(
 			}
 		});
 
-	if let Some(door) = door {
+	if let Some(door_obj) = door {
 		match door_interaction {
-			DoorInteraction::Opening => door.open_door(textures),
-			DoorInteraction::Closing => door.close_door(textures),
+			DoorInteraction::Opening => door_obj.open_door(textures),
+			DoorInteraction::Closing => door_obj.close_door(textures),
+			DoorInteraction::Toggle => match door_obj.door().unwrap().is_open {
+				true => door_obj.close_door(textures),
+				false => door_obj.open_door(textures),
+			},
 		};
 	}
 }
