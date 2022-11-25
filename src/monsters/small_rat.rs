@@ -43,37 +43,7 @@ pub struct SmallRat {
 }
 
 impl Monster for SmallRat {
-	fn new(textures: &Textures, floor_info: &FloorInfo) -> Self {
-		// Choose a room decently far from the player
-		let valid_room_extents = floor_info
-			.floor
-			.rooms()
-			.iter()
-			.filter_map(|room| {
-				let (room_top_left, room_bottom_right) = room.extents();
-				let room_center = (room_top_left + room_bottom_right) / 2;
-				let room_center_pos = (room_center * IVec2::splat(TILE_SIZE as i32)).as_vec2();
-
-				match room_center_pos.distance(floor_info.current_spawn()) > (12 * TILE_SIZE) as f32
-				{
-					true => Some((room_top_left, room_bottom_right)),
-					false => None,
-				}
-			})
-			.collect::<Vec<(IVec2, IVec2)>>();
-
-		let (room_top_left, room_bottom_right) = valid_room_extents.choose().unwrap();
-
-		let pos = {
-			// Pick a random position in the room
-			let rand_tile = IVec2::new(
-				rand::gen_range(room_top_left.x + 1, room_bottom_right.x - 1),
-				rand::gen_range(room_top_left.y + 1, room_bottom_right.y - 1),
-			);
-
-			(rand_tile * IVec2::splat(TILE_SIZE as i32)).as_vec2()
-		};
-
+	fn new(textures: &Textures, pos: Vec2) -> Self {
 		Self {
 			pos,
 			health: MAX_HEALTH,

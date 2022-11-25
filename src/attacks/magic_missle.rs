@@ -47,13 +47,19 @@ impl Attack for MagicMissile {
 
 		if collision_info.x {
 			movement.x = -movement.x;
-			self.angle = get_angle(movement, Vec2::ZERO);
 		}
 
 		if collision_info.y {
 			movement.y = -movement.y;
-			self.angle = get_angle(movement, Vec2::ZERO);
 		}
+
+		if collision_info.any() {
+			if self.bounces < 3 {
+				self.bounces += 1;
+			}
+		}
+
+		self.angle = get_angle(movement, Vec2::ZERO);
 
 		// Check to see if it's collided with a monster
 		if let Some((monster, collision_info)) = floor_info.monsters.iter_mut().find_map(|m| {
@@ -65,7 +71,7 @@ impl Attack for MagicMissile {
 				None
 			}
 		}) {
-			const BASE_DAMAGE: u16 = 4;
+			const BASE_DAMAGE: u16 = 2;
 			// The damage increases the more the projectile bounces
 			let damage = BASE_DAMAGE.pow((1 + self.bounces).into());
 
@@ -78,14 +84,23 @@ impl Attack for MagicMissile {
 			};
 			monster.take_damage(damage_info, &floor_info.floor);
 
-			if collision_info.x {
-				movement.x = -movement.x;
-				self.angle = get_angle(movement, Vec2::ZERO);
-			}
+			if self.bounces > 0 {
+				if collision_info.x {
+					movement.x = -movement.x;
+				}
 
-			if collision_info.y {
-				movement.y = -movement.y;
+				if collision_info.y {
+					movement.y = -movement.y;
+				}
+
 				self.angle = get_angle(movement, Vec2::ZERO);
+
+				if self.bounces < 3 {
+					self.bounces += 1;
+				}
+			} else {
+				self.pos -= movement;
+				self.time += 3;
 			}
 		}
 

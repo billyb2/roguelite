@@ -1,15 +1,13 @@
-
-
 use crate::draw::{Drawable, Textures};
 use crate::enchantments::{Enchantment, EnchantmentKind};
 use crate::map::FloorInfo;
 use crate::math::{aabb_collision, AsAABB, AxisAlignedBoundingBox};
-use crate::player::Player;
+use crate::player::{Player, PLAYER_SIZE};
 use macroquad::prelude::*;
 
 use super::Attack;
 
-const SIZE: Vec2 = Vec2::new(75.0, 25.0);
+const SIZE: Vec2 = Vec2::new(90.0, 90.0);
 
 pub struct BlindingLight {
 	pos: Vec2,
@@ -23,7 +21,7 @@ impl Attack for BlindingLight {
 		player: &Player, angle: f32, textures: &Textures, _floor: &FloorInfo, _is_primary: bool,
 	) -> Box<Self> {
 		Box::new(Self {
-			pos: player.pos() + (Vec2::new(angle.cos(), angle.sin()) * SIZE),
+			pos: player.pos() + (Vec2::new(angle.cos(), angle.sin()) * PLAYER_SIZE),
 			angle,
 			texture: *textures.get("blinding_light.webp").unwrap(),
 			time: 0,

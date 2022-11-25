@@ -84,7 +84,7 @@ pub static TEXTURES: Lazy<Textures> = Lazy::new(|| {
 		.collect()
 });
 
-pub const NUM_PLAYERS: usize = 2;
+pub const NUM_PLAYERS: usize = 1;
 
 #[macroquad::main(window_conf)]
 async fn main() {

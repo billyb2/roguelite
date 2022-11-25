@@ -611,15 +611,32 @@ impl FloorInfo {
 	}
 
 	fn spawn_monsters(&mut self, textures: &Textures) {
-		let monsters = (0..55)
-			.into_par_iter()
-			.map(|_| {
-				let monster: Box<dyn Monster> = Box::new(SmallRat::new(textures, self));
+		// Choose every room that doesn't contain the spawn point
+		let spawn_tile = (self.spawn / Vec2::splat(TILE_SIZE as f32))
+			.ceil()
+			.as_ivec2();
+
+		let valid_rooms = self.floor.rooms.iter().filter(|room| {
+			let (top_left, bottom_right) = room.extents();
+
+			!(spawn_tile.cmpgt(top_left).all() && spawn_tile.cmplt(bottom_right).all())
+		});
+
+		self.monsters.extend(valid_rooms.flat_map(|room| {
+			// Pick a random position in each room to spawn from 0 to 6 rats
+			let (top_left, bottom_right) = room.extents();
+			let tile_pos = IVec2::new(
+				rand::gen_range(top_left.x + 1, bottom_right.x - 1),
+				rand::gen_range(top_left.y + 1, bottom_right.y - 1),
+			);
+
+			let pos = (tile_pos * IVec2::splat(TILE_SIZE as i32)).as_vec2();
+
+			(0..rand::gen_range(0, 6)).into_iter().map(move |_| {
+				let monster: Box<dyn Monster> = Box::new(SmallRat::new(textures, pos));
 				monster
 			})
-			.collect();
-
-		self.monsters = monsters;
+		}));
 	}
 
 	pub fn should_descend(&self, players: &[Player]) -> bool {
