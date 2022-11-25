@@ -6,7 +6,7 @@ use crate::draw::{Drawable, Textures};
 use crate::enchantments::{Enchantable, Enchantment};
 use crate::items::ItemType::{self, *};
 use crate::items::{attack_with_item, ItemInfo};
-use crate::map::{pos_to_tile, Floor, FloorInfo, TILE_SIZE};
+use crate::map::{pos_to_tile, Floor, FloorInfo};
 use crate::math::{aabb_collision, AsAABB, AxisAlignedBoundingBox};
 use macroquad::prelude::*;
 

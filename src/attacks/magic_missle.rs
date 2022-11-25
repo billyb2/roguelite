@@ -1,6 +1,6 @@
 use crate::draw::{Drawable, Textures};
 use crate::map::FloorInfo;
-use crate::math::{aabb_collision, aabb_collision_dir, get_angle, AsAABB, AxisAlignedBoundingBox};
+use crate::math::{aabb_collision_dir, get_angle, AsAABB, AxisAlignedBoundingBox};
 use crate::player::{DamageInfo, Player};
 use macroquad::prelude::*;
 

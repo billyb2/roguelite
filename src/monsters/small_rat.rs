@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use crate::draw::{Drawable, Textures};
 use crate::enchantments::{Enchantable, Enchantment, EnchantmentKind};
-use crate::map::{pos_to_tile, Floor, FloorInfo, Object, TILE_SIZE};
+use crate::map::{pos_to_tile, Floor, Object, TILE_SIZE};
 use crate::math::{aabb_collision, get_angle, AsAABB, AxisAlignedBoundingBox};
 use crate::monsters::Monster;
 use crate::player::{damage_player, DamageInfo, Player};

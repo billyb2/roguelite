@@ -64,7 +64,7 @@ pub fn aabb_collision<A: AsAABB, B: AsAABB>(aabb1: &A, aabb2: &B, distance: Vec2
 }
 
 pub fn aabb_collision_dir<A: AsAABB, B: AsAABB>(aabb1: &A, aabb2: &B, distance: Vec2) -> BVec2 {
-	let mut obj1 = aabb1.as_aabb();
+	let obj1 = aabb1.as_aabb();
 	let obj2 = aabb2.as_aabb();
 
 	let obj1_pos_x = obj1.pos + Vec2::new(distance.x, 0.0);

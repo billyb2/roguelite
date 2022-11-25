@@ -279,7 +279,7 @@ impl FloorInfo {
 			if !rooms.iter().any(|room: &Room| {
 				// Don't let rooms be just one room apart, since moving through doors fro both
 				// rooms is annoying to the player Also don't let rooms collide w each other
-				const MIN_DISTANCE_BETWEEN_ROOMS: i32 = 1;
+				const MIN_DISTANCE_BETWEEN_ROOMS: i32 = 2;
 
 				(room.bottom_right + MIN_DISTANCE_BETWEEN_ROOMS)
 					.cmpgt(top_left - MIN_DISTANCE_BETWEEN_ROOMS)
@@ -300,7 +300,7 @@ impl FloorInfo {
 		// rooms.drain(0..(rooms.len() - MAX_NUM_ROOMS));
 		// assert!(rooms.len() == MAX_NUM_ROOMS);
 
-		let mut hallways: Vec<IVec2> = rooms[0..(rooms.len() * 3) / 4]
+		let mut hallways: Vec<IVec2> = rooms //[0..(rooms.len() * 3) / 4]
 			.iter()
 			.flat_map(|room: &Room| {
 				let (top_left_room, bottom_right_room) = (room.top_left, room.bottom_right);
