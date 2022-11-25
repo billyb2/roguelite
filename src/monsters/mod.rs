@@ -25,7 +25,7 @@ struct Effect {
 
 // All monsters are required to have a drawable AABB and be drawable
 pub trait Monster: AsAABB + Drawable + Send + Sync + Enchantable {
-	fn new(textures: &Textures, pos: Vec2) -> Self
+	fn new(textures: &Textures, pos: Vec2) -> Box<dyn Monster>
 	where
 		Self: Sized;
 	// Movement and damaging players are seperate so that the movement part can be

@@ -43,8 +43,8 @@ pub struct SmallRat {
 }
 
 impl Monster for SmallRat {
-	fn new(textures: &Textures, pos: Vec2) -> Self {
-		Self {
+	fn new(textures: &Textures, pos: Vec2) -> Box<dyn Monster> {
+		let monster: Box<dyn Monster> = Box::new(Self {
 			pos,
 			health: MAX_HEALTH,
 			texture: *textures.get("small_mouse.webp").unwrap(),
@@ -55,7 +55,9 @@ impl Monster for SmallRat {
 			current_target: None,
 			enchantments: HashMap::new(),
 			damaged_by: HashSet::new(),
-		}
+		});
+
+		monster
 	}
 
 	fn movement(&mut self, players: &[Player], floor: &Floor) {

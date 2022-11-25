@@ -227,7 +227,7 @@ async fn main() {
 
 		door_interaction_input(&players[0], &players, map.current_floor_mut(), &TEXTURES);
 
-		trigger_traps(&mut players, map.current_floor_mut());
+		trigger_traps(&mut players, map.current_floor_mut(), &TEXTURES);
 		update_cooldowns(&mut players);
 		update_attacks(&mut players, map.current_floor_mut(), &mut attacks);
 		update_monsters(&mut players, map.current_floor_mut());

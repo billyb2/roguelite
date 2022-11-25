@@ -27,6 +27,7 @@ pub const MAP_SIZE_TILES: IVec2 = IVec2::new(MAP_WIDTH_TILES as i32, MAP_HEIGHT_
 #[derive(Copy, Clone)]
 enum TrapType {
 	Teleport,
+	SpawnMonster,
 }
 
 #[derive(Copy, Clone)]
@@ -193,7 +194,10 @@ impl Room {
 			let trap = match is_trap {
 				true => Some(Trap {
 					triggered: false,
-					trap_type: TrapType::Teleport,
+					trap_type: match rand::rand() > u32::MAX {
+						true => TrapType::Teleport,
+						false => TrapType::SpawnMonster,
+					},
 				}),
 				false => None,
 			};
@@ -244,8 +248,10 @@ impl Room {
 
 pub struct FloorInfo {
 	spawn: Vec2,
+	monster_types: Vec<fn(&Textures, Vec2) -> Box<dyn Monster>>,
 	pub monsters: Vec<Box<dyn Monster>>,
 	pub floor: Floor,
+	rooms: Vec<Room>,
 	exit: Object,
 }
 
@@ -588,11 +594,13 @@ impl FloorInfo {
 			.map(|obj| unsafe { obj.assume_init() })
 			.collect();
 
-		let floor = Floor { objects, rooms };
+		let floor = Floor { objects };
 
 		let mut floor_info = FloorInfo {
+			monster_types: vec![SmallRat::new],
 			spawn,
 			floor,
+			rooms,
 			exit: Object {
 				pos: exit_pos,
 				texture: *textures.get("green.webp").unwrap(),
@@ -610,13 +618,17 @@ impl FloorInfo {
 		floor_info
 	}
 
+	pub fn rooms(&self) -> &Vec<Room> {
+		&self.rooms
+	}
+
 	fn spawn_monsters(&mut self, textures: &Textures) {
 		// Choose every room that doesn't contain the spawn point
 		let spawn_tile = (self.spawn / Vec2::splat(TILE_SIZE as f32))
 			.ceil()
 			.as_ivec2();
 
-		let valid_rooms = self.floor.rooms.iter().filter(|room| {
+		let valid_rooms = self.rooms.iter().filter(|room| {
 			let (top_left, bottom_right) = room.extents();
 
 			!(spawn_tile.cmpgt(top_left).all() && spawn_tile.cmplt(bottom_right).all())
@@ -631,10 +643,11 @@ impl FloorInfo {
 			);
 
 			let pos = (tile_pos * IVec2::splat(TILE_SIZE as i32)).as_vec2();
+			let monster_types = &self.monster_types;
 
 			(0..rand::gen_range(0, 6)).into_iter().map(move |_| {
-				let monster: Box<dyn Monster> = Box::new(SmallRat::new(textures, pos));
-				monster
+				let monster_fn = monster_types.choose().unwrap();
+				monster_fn(textures, pos)
 			})
 		}));
 	}
@@ -656,7 +669,6 @@ impl FloorInfo {
 }
 
 pub struct Floor {
-	rooms: Vec<Room>,
 	objects: Vec<Object>,
 }
 
@@ -669,10 +681,6 @@ impl Floor {
 	pub fn get_object_from_pos_mut(&mut self, pos: IVec2) -> Option<&mut Object> {
 		self.objects
 			.get_mut((pos.x + pos.y * MAP_WIDTH_TILES as i32) as usize)
-	}
-
-	pub fn rooms(&self) -> &Vec<Room> {
-		&self.rooms
 	}
 
 	// Same as collision, but returns the actual Object collided w.
@@ -932,13 +940,7 @@ pub fn pos_to_tile(obj: &dyn AsAABB) -> IVec2 {
 	(center / Vec2::splat(TILE_SIZE as f32)).floor().as_ivec2()
 }
 
-pub fn trigger_traps(players: &mut [Player], floor_info: &mut FloorInfo) {
-	let rand_room = floor_info.floor.rooms.choose().unwrap();
-	let rand_pos = IVec2::new(
-		rand::gen_range(rand_room.top_left.x + 1, rand_room.bottom_right.x - 1),
-		rand::gen_range(rand_room.top_left.y + 1, rand_room.bottom_right.y - 1),
-	);
-
+pub fn trigger_traps(players: &mut [Player], floor_info: &mut FloorInfo, textures: &Textures) {
 	let trapped_objs = floor_info.floor.untriggered_traps();
 
 	trapped_objs.for_each(|trapped_obj| {
@@ -946,14 +948,44 @@ pub fn trigger_traps(players: &mut [Player], floor_info: &mut FloorInfo) {
 			let player_tile_pos = pos_to_tile(player);
 
 			if player_tile_pos == trapped_obj.tile_pos() {
-				let trap = &mut trapped_obj.trap.unwrap();
+				let trap = trapped_obj.trap.as_mut().unwrap();
 
 				trap.triggered = true;
 
 				match trap.trap_type {
 					TrapType::Teleport => {
+						let rand_room = floor_info.rooms.choose().unwrap();
+						let rand_pos = IVec2::new(
+							rand::gen_range(rand_room.top_left.x + 1, rand_room.bottom_right.x - 1),
+							rand::gen_range(rand_room.top_left.y + 1, rand_room.bottom_right.y - 1),
+						);
 						// Pick a random background object to teleport the player to
 						player.pos = (rand_pos * IVec2::splat(TILE_SIZE as i32)).as_vec2();
+					},
+					TrapType::SpawnMonster => {
+						// Summons six rats in the room somewhere
+						floor_info.monsters.extend((0..6).into_iter().map(|_| {
+							let player_room = floor_info
+								.rooms
+								.iter()
+								.find(|room| room.inside_room(player_tile_pos))
+								.unwrap();
+
+							let tile_pos = IVec2::new(
+								rand::gen_range(
+									player_room.top_left.x + 1,
+									player_room.bottom_right.x - 1,
+								),
+								rand::gen_range(
+									player_room.top_left.y + 1,
+									player_room.bottom_right.y - 1,
+								),
+							);
+
+							let pos = (tile_pos * IVec2::splat(TILE_SIZE as i32)).as_vec2();
+
+							floor_info.monster_types.choose().unwrap()(textures, pos)
+						}))
 					},
 				};
 			}

@@ -72,6 +72,8 @@ impl Attack for Stab {
 			};
 
 			monster.take_damage(damage_info, &floor_info.floor);
+
+			return true;
 		}
 
 		false
