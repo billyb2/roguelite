@@ -30,6 +30,7 @@ const MAX_HEALTH: u16 = 22;
 pub struct SmallRat {
 	health: u16,
 	pos: Vec2,
+	speed_mul: f32,
 	texture: Texture2D,
 	attack_mode: AttackMode,
 	time_spent_moving: u16,
@@ -55,6 +56,7 @@ impl Monster for SmallRat {
 			current_target: None,
 			enchantments: HashMap::new(),
 			damaged_by: HashSet::new(),
+			speed_mul: 1.0,
 		});
 
 		monster
@@ -140,7 +142,7 @@ fn step_pathfinding<T: Fn(&mut SmallRat) -> Target>(
 					},
 				};
 
-				if let Some(path) = floor.find_path(my_monster, &goal_aabb, true, Some(4)) {
+				if let Some(path) = floor.find_path(my_monster, &goal_aabb, true, false, Some(4)) {
 					my_monster.current_path = Some((path, 1));
 				} else {
 					my_monster.current_target = Some(find_target(my_monster));
@@ -174,7 +176,7 @@ fn step_pathfinding<T: Fn(&mut SmallRat) -> Target>(
 					}
 				} else {
 					let angle = get_angle(*pos, my_monster.pos);
-					let change = Vec2::new(angle.cos(), angle.sin()) * speed;
+					let change = Vec2::new(angle.cos(), angle.sin()) * speed * my_monster.speed_mul;
 
 					if floor.collision(my_monster, change) {
 						// Only stop targetting when there is a door
@@ -304,7 +306,7 @@ fn move_blindly(my_monster: &mut SmallRat, floor: &Floor) {
 		}
 
 		let angle = get_angle(pos, my_monster.pos);
-		let change = Vec2::new(angle.cos(), angle.sin()) * Vec2::splat(1.2);
+		let change = Vec2::new(angle.cos(), angle.sin()) * Vec2::splat(1.2) * my_monster.speed_mul;
 
 		if !floor.collision(my_monster, change) {
 			my_monster.pos += change;
@@ -334,6 +336,9 @@ impl Enchantable for SmallRat {
 				self.current_path = None;
 				self.time_til_move = 50;
 			},
+			EnchantmentKind::Slimed => {
+				self.speed_mul = 0.5;
+			},
 		};
 
 		self.enchantments.insert(
@@ -358,6 +363,9 @@ impl Enchantable for SmallRat {
 						self.time_spent_moving = 0;
 						self.current_target = None;
 						self.current_path = None;
+					},
+					EnchantmentKind::Slimed => {
+						self.speed_mul = 1.0;
 					},
 				}
 			}

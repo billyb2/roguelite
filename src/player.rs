@@ -1,9 +1,9 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
 
 use crate::attacks::*;
 use crate::draw::{Drawable, Textures};
-use crate::enchantments::{Enchantable, Enchantment};
+use crate::enchantments::{Enchantable, Enchantment, EnchantmentKind};
 use crate::items::ItemType::{self, *};
 use crate::items::{attack_with_item, ItemInfo};
 use crate::map::{pos_to_tile, Floor, FloorInfo};
@@ -101,6 +101,8 @@ pub struct Player {
 
 	pub gold: u32,
 	pub inventory: PlayerInventory,
+
+	enchantments: HashMap<EnchantmentKind, (Enchantment, u16)>,
 }
 
 impl Player {
@@ -179,6 +181,7 @@ impl Player {
 			level: 0,
 			gold: 0,
 			inventory: PlayerInventory::new(),
+			enchantments: HashMap::new(),
 		}
 	}
 
@@ -232,14 +235,23 @@ impl Player {
 	}
 
 	#[inline]
-	pub fn index(&self) -> usize {
-		self.index
+	pub fn enchantments(&self) -> &HashMap<EnchantmentKind, (Enchantment, u16)> {
+		&self.enchantments
 	}
 }
 
 pub fn move_player(player: &mut Player, angle: f32, speed: Option<Vec2>, floor_info: &Floor) {
 	let direction: Vec2 = (angle.cos(), angle.sin()).into();
-	let distance = direction * speed.unwrap_or_else(|| Vec2::splat(player.speed));
+	let distance = direction
+		* speed.unwrap_or_else(|| {
+			let speed_mul = match player.enchantments.get(&EnchantmentKind::Slimed) {
+				Some((enchantnment, _)) => 1.0 / enchantnment.strength as f32,
+				None => 1.0,
+			};
+
+			let speed = player.speed * speed_mul;
+			Vec2::splat(speed)
+		});
 
 	let collision_info = floor_info.collision_dir(player, distance);
 	if !collision_info.x {
@@ -303,8 +315,8 @@ pub fn update_cooldowns(players: &mut [Player]) {
 }
 
 pub fn player_attack(
-	player: &mut Player, textures: &Textures, attacks: &mut Vec<Box<dyn Attack>>,
-	floor: &FloorInfo, is_primary: bool,
+	player: &mut Player, index: Option<usize>, textures: &Textures,
+	attacks: &mut Vec<Box<dyn Attack>>, floor: &FloorInfo, is_primary: bool,
 ) {
 	let item = match is_primary {
 		true => player.primary_item,
@@ -312,7 +324,7 @@ pub fn player_attack(
 	};
 
 	if let Some(item) = item {
-		if let Some(attack) = attack_with_item(item, player, textures, floor, is_primary) {
+		if let Some(attack) = attack_with_item(item, player, index, textures, floor, is_primary) {
 			let cooldown = match is_primary {
 				true => &mut player.primary_cooldown,
 				false => &mut player.secondary_cooldown,
@@ -448,12 +460,19 @@ impl Drawable for Player {
 }
 
 impl Enchantable for Player {
-	fn apply_enchantment(&mut self, _enchantment: Enchantment) {
-		todo!()
+	fn apply_enchantment(&mut self, enchantment: Enchantment) {
+		if self.enchantments.get(&enchantment.kind).is_none() {
+			self.enchantments
+				.insert(enchantment.kind, (enchantment, 60));
+		}
 	}
 
 	fn update_enchantments(&mut self) {
-		todo!()
+		self.enchantments
+			.retain(|_enchantment_kind, (_enchantment, time_til_removal)| {
+				*time_til_removal -= 1;
+				*time_til_removal != 0
+			});
 	}
 }
 

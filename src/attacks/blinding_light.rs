@@ -1,6 +1,6 @@
 use crate::draw::{Drawable, Textures};
 use crate::enchantments::{Enchantment, EnchantmentKind};
-use crate::map::FloorInfo;
+use crate::map::{Floor, FloorInfo};
 use crate::math::{aabb_collision, AsAABB, AxisAlignedBoundingBox};
 use crate::player::{Player, PLAYER_SIZE};
 use macroquad::prelude::*;
@@ -18,17 +18,18 @@ pub struct BlindingLight {
 
 impl Attack for BlindingLight {
 	fn new(
-		player: &Player, angle: f32, textures: &Textures, _floor: &FloorInfo, _is_primary: bool,
+		aabb: &dyn AsAABB, _index: Option<usize>, angle: f32, textures: &Textures, _floor: &Floor,
+		_is_primary: bool,
 	) -> Box<Self> {
 		Box::new(Self {
-			pos: player.pos() + (Vec2::new(angle.cos(), angle.sin()) * PLAYER_SIZE),
+			pos: aabb.center() + (Vec2::new(angle.cos(), angle.sin()) * PLAYER_SIZE),
 			angle,
 			texture: *textures.get("blinding_light.webp").unwrap(),
 			time: 0,
 		})
 	}
 
-	fn update(&mut self, floor: &mut FloorInfo) -> bool {
+	fn update(&mut self, floor: &mut FloorInfo, _players: &mut [Player]) -> bool {
 		self.time += 1;
 
 		if self.time >= 60 {
@@ -58,7 +59,7 @@ impl Attack for BlindingLight {
 		3
 	}
 
-	fn side_effects(&self, _player: &mut Player, _floor: &FloorInfo) {}
+	fn side_effects(&self, _player: &mut Player, _floor: &Floor) {}
 }
 
 impl AsAABB for BlindingLight {

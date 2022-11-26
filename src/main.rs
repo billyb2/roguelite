@@ -26,6 +26,7 @@ use macroquad::prelude::*;
 use macroquad::ui::{root_ui, Skin};
 use once_cell::sync::Lazy;
 
+use crate::enchantments::{Enchantable, EnchantmentKind};
 use crate::math::AsAABB;
 
 pub const MAX_VIEW_OF_PLAYER: f32 = 200.0;
@@ -197,8 +198,13 @@ async fn main() {
 
 		// If running at more than 60 fps, slow down
 		// Logic
+		players
+			.iter_mut()
+			.for_each(|player| player.update_enchantments());
+
 		movement_input(
 			&mut players[0],
+			Some(0),
 			&mut attacks,
 			&TEXTURES,
 			map.current_floor_mut(),
@@ -210,6 +216,7 @@ async fn main() {
 
 			movement_input_controller(
 				&mut players[1],
+				Some(1),
 				&mut attacks,
 				&TEXTURES,
 				map.current_floor_mut(),
@@ -228,9 +235,16 @@ async fn main() {
 		door_interaction_input(&players[0], &players, map.current_floor_mut(), &TEXTURES);
 
 		trigger_traps(&mut players, map.current_floor_mut(), &TEXTURES);
+		set_effects(&mut players, map.current_floor_mut(), &TEXTURES);
+		update_effects(&mut map.current_floor_mut().floor);
 		update_cooldowns(&mut players);
 		update_attacks(&mut players, map.current_floor_mut(), &mut attacks);
-		update_monsters(&mut players, map.current_floor_mut());
+		update_monsters(
+			&mut players,
+			map.current_floor_mut(),
+			&mut attacks,
+			&TEXTURES,
+		);
 
 		if map.current_floor().should_descend(&players) {
 			map.descend(&mut players);
@@ -301,27 +315,33 @@ async fn main() {
 
 				set_camera(camera);
 
-				gl_use_material(material);
-				material.set_uniform("lowest_light_level", 0.6_f32);
+				if player
+					.enchantments()
+					.get(&EnchantmentKind::Blinded)
+					.is_none()
+				{
+					gl_use_material(material);
+					material.set_uniform("lowest_light_level", 0.6_f32);
 
-				visible_objects.iter().flatten().for_each(|o| {
-					o.draw();
-				});
+					visible_objects.iter().flatten().for_each(|o| {
+						o.draw();
+					});
 
-				// Draw all monsters on top of a visible object tile
-				monsters_to_draw.clone().for_each(|m| m.draw());
+					// Draw all monsters on top of a visible object tile
+					monsters_to_draw.clone().for_each(|m| m.draw());
 
-				material.set_uniform("lowest_light_level", 0.25_f32);
+					material.set_uniform("lowest_light_level", 0.25_f32);
 
-				seen_objects.clone().for_each(|o| {
-					o.draw();
-				});
+					seen_objects.clone().for_each(|o| {
+						o.draw();
+					});
 
-				map.current_floor().exit().draw();
+					map.current_floor().exit().draw();
 
-				material.set_uniform("lowest_light_level", 1.0_f32);
+					material.set_uniform("lowest_light_level", 1.0_f32);
 
-				attacks.iter().for_each(|a| a.draw());
+					attacks.iter().for_each(|a| a.draw());
+				}
 
 				gl_use_default_material();
 				players.iter().for_each(|p| p.draw());

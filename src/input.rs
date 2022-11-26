@@ -10,8 +10,8 @@ use gilrs::{Axis, Button, Gamepad};
 use macroquad::prelude::*;
 
 pub fn movement_input(
-	player: &mut Player, attacks: &mut Vec<Box<dyn Attack>>, textures: &Textures,
-	floor_info: &mut FloorInfo, camera: &Camera2D,
+	player: &mut Player, index: Option<usize>, attacks: &mut Vec<Box<dyn Attack>>,
+	textures: &Textures, floor_info: &mut FloorInfo, camera: &Camera2D,
 ) {
 	if player.hp() == 0 {
 		return;
@@ -58,11 +58,11 @@ pub fn movement_input(
 	);
 
 	if is_mouse_button_down(MouseButton::Left) {
-		player_attack(player, textures, attacks, floor_info, true);
+		player_attack(player, index, textures, attacks, floor_info, true);
 	}
 
 	if is_mouse_button_down(MouseButton::Right) {
-		player_attack(player, textures, attacks, floor_info, false);
+		player_attack(player, index, textures, attacks, floor_info, false);
 	}
 
 	if is_key_down(KeyCode::P) {
@@ -76,8 +76,8 @@ pub fn movement_input(
 }
 
 pub fn movement_input_controller(
-	player: &mut Player, attacks: &mut Vec<Box<dyn Attack>>, textures: &Textures,
-	floor_info: &mut FloorInfo, gamepad: &Gamepad,
+	player: &mut Player, index: Option<usize>, attacks: &mut Vec<Box<dyn Attack>>,
+	textures: &Textures, floor_info: &mut FloorInfo, gamepad: &Gamepad,
 ) {
 	let x_movement = gamepad
 		.axis_data(Axis::LeftStickX)
@@ -108,13 +108,13 @@ pub fn movement_input_controller(
 
 	if let Some(button_data) = gamepad.button_data(Button::LeftTrigger2) {
 		if button_data.is_pressed() {
-			player_attack(player, textures, attacks, floor_info, false);
+			player_attack(player, index, textures, attacks, floor_info, false);
 		}
 	}
 
 	if let Some(button_data) = gamepad.button_data(Button::RightTrigger2) {
 		if button_data.is_pressed() {
-			player_attack(player, textures, attacks, floor_info, true);
+			player_attack(player, index, textures, attacks, floor_info, true);
 		}
 	}
 }

@@ -1,6 +1,7 @@
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub enum EnchantmentKind {
 	Blinded,
+	Slimed,
 }
 
 #[derive(PartialEq, Eq, Hash)]

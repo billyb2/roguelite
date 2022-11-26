@@ -10,7 +10,7 @@ use crate::{
 	TEXTURES,
 };
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum ItemType {
 	ShortSword,
 	WizardsDagger,
@@ -18,7 +18,7 @@ pub enum ItemType {
 	Gold(u32),
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct ItemInfo {
 	cursed: bool,
 	pub item_type: ItemType,
@@ -64,32 +64,44 @@ impl Display for ItemInfo {
 }
 
 pub fn attack_with_item(
-	item: ItemInfo, player: &mut Player, textures: &Textures, floor: &FloorInfo,
-	primary_attack: bool,
+	item: ItemInfo, player: &mut Player, index: Option<usize>, textures: &Textures,
+	floor: &FloorInfo, primary_attack: bool,
 ) -> Option<Box<dyn Attack>> {
 	match item.item_type {
 		ItemType::ShortSword => Some(Slash::new(
 			player,
+			index,
 			player.angle,
 			textures,
-			floor,
+			&floor.floor,
 			primary_attack,
 		)),
 		ItemType::WizardsDagger => Some(Stab::new(
 			player,
+			index,
 			player.angle,
 			textures,
-			floor,
+			&floor.floor,
 			primary_attack,
 		)),
 		ItemType::WizardGlove => player.spells().get(0).copied().map(|spell| {
 			let attack: Box<dyn Attack> = match spell {
-				Spell::BlindingLight => {
-					BlindingLight::new(player, player.angle, textures, floor, primary_attack)
-				},
-				Spell::MagicMissile => {
-					MagicMissile::new(player, player.angle, textures, floor, primary_attack)
-				},
+				Spell::BlindingLight => BlindingLight::new(
+					player,
+					index,
+					player.angle,
+					textures,
+					&floor.floor,
+					primary_attack,
+				),
+				Spell::MagicMissile => MagicMissile::new(
+					player,
+					index,
+					player.angle,
+					textures,
+					&floor.floor,
+					primary_attack,
+				),
 			};
 
 			attack

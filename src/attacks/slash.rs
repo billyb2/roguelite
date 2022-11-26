@@ -1,7 +1,5 @@
-
-
 use crate::draw::{Drawable, Textures};
-use crate::map::FloorInfo;
+use crate::map::{Floor, FloorInfo};
 use crate::math::{aabb_collision, get_angle, AsAABB, AxisAlignedBoundingBox};
 use crate::player::{DamageInfo, Player, PLAYER_SIZE};
 use macroquad::prelude::*;
@@ -21,27 +19,28 @@ pub struct Slash {
 
 impl Attack for Slash {
 	fn new(
-		player: &Player, angle: f32, textures: &Textures, _floor: &FloorInfo, _is_primary: bool,
+		aabb: &dyn AsAABB, index: Option<usize>, angle: f32, textures: &Textures, _floor: &Floor,
+		_is_primary: bool,
 	) -> Box<Self> {
 		Box::new(Self {
-			pos: player.pos(),
+			pos: aabb.center(),
 			angle,
 			texture: *textures.get("slash.webp").unwrap(),
 			time: 0,
-			player_index: player.index(),
+			player_index: index.unwrap(),
 			num_piercings: 0,
 		})
 	}
 
-	fn side_effects(&self, player: &mut Player, floor_info: &FloorInfo) {
+	fn side_effects(&self, player: &mut Player, floor: &Floor) {
 		let change = Vec2::new(self.angle.cos(), self.angle.sin()) * PLAYER_SIZE;
 
-		if !floor_info.floor.collision(player, change) {
+		if !floor.collision(player, change) {
 			player.pos += change;
 		}
 	}
 
-	fn update(&mut self, floor_info: &mut FloorInfo) -> bool {
+	fn update(&mut self, floor_info: &mut FloorInfo, _players: &mut [Player]) -> bool {
 		let movement = Vec2::new(self.angle.cos(), self.angle.sin()) * 6.0;
 
 		if !floor_info.floor.collision(self, movement) {

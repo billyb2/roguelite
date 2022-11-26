@@ -1,5 +1,5 @@
 use crate::draw::{Drawable, Textures};
-use crate::map::FloorInfo;
+use crate::map::{Floor, FloorInfo};
 use crate::math::{aabb_collision_dir, get_angle, AsAABB, AxisAlignedBoundingBox};
 use crate::player::{DamageInfo, Player};
 use macroquad::prelude::*;
@@ -19,28 +19,29 @@ pub struct MagicMissile {
 
 impl Attack for MagicMissile {
 	fn new(
-		player: &Player, angle: f32, textures: &Textures, _floor: &FloorInfo, _is_primary: bool,
+		aabb: &dyn AsAABB, index: Option<usize>, angle: f32, textures: &Textures, _floor: &Floor,
+		_is_primary: bool,
 	) -> Box<Self> {
 		Box::new(Self {
-			pos: player.pos(),
+			pos: aabb.center(),
 			angle,
 			texture: *textures.get("magic_missile.webp").unwrap(),
 			time: 0,
 			bounces: 0,
-			player_index: player.index(),
+			player_index: index.unwrap(),
 		})
 	}
 
-	fn side_effects(&self, player: &mut Player, floor_info: &FloorInfo) {
+	fn side_effects(&self, player: &mut Player, floor: &Floor) {
 		// "Knocback" the player a bit
 		let change = -Vec2::new(self.angle.cos(), self.angle.sin()) * 1.5;
 
-		if !floor_info.floor.collision(player, change) {
+		if !floor.collision(player, change) {
 			player.pos += change;
 		}
 	}
 
-	fn update(&mut self, floor_info: &mut FloorInfo) -> bool {
+	fn update(&mut self, floor_info: &mut FloorInfo, _players: &mut [Player]) -> bool {
 		let mut movement = Vec2::new(self.angle.cos(), self.angle.sin()) * 5.0;
 
 		let collision_info = floor_info.floor.collision_dir(self, movement);

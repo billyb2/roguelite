@@ -1,4 +1,6 @@
-use std::mem::MaybeUninit;
+use std::borrow::Borrow;
+use std::collections::HashMap;
+
 
 use macroquad::prelude::*;
 use macroquad::rand;
@@ -8,12 +10,16 @@ use rayon::prelude::*;
 
 use crate::draw::Drawable;
 use crate::draw::Textures;
+use crate::enchantments::Enchantable;
+use crate::enchantments::Enchantment;
+use crate::enchantments::EnchantmentKind;
 use crate::items::ItemInfo;
 use crate::items::ItemType;
 use crate::math::aabb_collision_dir;
 use crate::math::points_on_circumference;
 use crate::math::points_on_line;
 use crate::math::{aabb_collision, AsAABB, AxisAlignedBoundingBox};
+use crate::monsters::GreenSlime;
 use crate::monsters::{Monster, SmallRat};
 use crate::player::Player;
 
@@ -24,19 +30,39 @@ pub const MAP_HEIGHT_TILES: usize = 50;
 
 pub const MAP_SIZE_TILES: IVec2 = IVec2::new(MAP_WIDTH_TILES as i32, MAP_HEIGHT_TILES as i32);
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 enum TrapType {
 	Teleport,
 	SpawnMonster,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 struct Trap {
 	triggered: bool,
 	trap_type: TrapType,
 }
 
-#[derive(Clone)]
+#[derive(Copy, Clone, Debug)]
+enum EffectType {
+	Slimed,
+}
+
+#[derive(Clone, Debug)]
+struct Effect {
+	time_til_dissipate: Option<u16>,
+	effect_type: EffectType,
+}
+
+impl Into<Enchantment> for EffectType {
+	fn into(self) -> Enchantment {
+		Enchantment {
+			strength: 1,
+			kind: EnchantmentKind::Slimed,
+		}
+	}
+}
+
+#[derive(Clone, Debug)]
 pub struct Object {
 	pos: IVec2,
 	texture: Texture2D,
@@ -45,6 +71,22 @@ pub struct Object {
 	items: Vec<ItemInfo>,
 	door: Option<Door>,
 	trap: Option<Trap>,
+	effects: HashMap<EffectType, Effect>,
+}
+
+impl Default for Object {
+	fn default() -> Self {
+		Self {
+			pos: IVec2::ZERO,
+			texture: Texture2D::empty(),
+			is_floor: false,
+			has_been_seen: false,
+			items: Vec::new(),
+			door: None,
+			trap: None,
+			effects: HashMap::new(),
+		}
+	}
 }
 
 impl PartialEq for Object {
@@ -58,7 +100,7 @@ impl Object {
 		self.pos
 	}
 
-	fn is_collidable(&self) -> bool {
+	pub fn is_collidable(&self) -> bool {
 		if self.is_floor {
 			return false;
 		}
@@ -100,16 +142,18 @@ impl Object {
 	}
 }
 
-impl AsAABB for Object {
+impl<A: Borrow<Object>> AsAABB for A {
 	fn as_aabb(&self) -> AxisAlignedBoundingBox {
+		let obj = self.borrow();
+
 		AxisAlignedBoundingBox {
-			pos: self.pos.as_vec2() * Vec2::splat(TILE_SIZE as f32),
+			pos: obj.pos.as_vec2() * Vec2::splat(TILE_SIZE as f32),
 			size: Vec2::splat(TILE_SIZE as f32),
 		}
 	}
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct Door {
 	pos: IVec2,
 	pub is_open: bool,
@@ -181,6 +225,7 @@ impl Room {
 					has_been_seen: false,
 					items: Vec::new(),
 					door,
+					..Default::default()
 				}
 			})
 			.collect()
@@ -194,7 +239,7 @@ impl Room {
 			let trap = match is_trap {
 				true => Some(Trap {
 					triggered: false,
-					trap_type: match rand::rand() > u32::MAX {
+					trap_type: match rand::rand() > u32::MAX / 2 {
 						true => TrapType::Teleport,
 						false => TrapType::SpawnMonster,
 					},
@@ -227,6 +272,7 @@ impl Room {
 				door: None,
 				items,
 				trap,
+				..Default::default()
 			}
 		};
 
@@ -243,6 +289,10 @@ impl Room {
 	/// Returns whether or not a position is inside a room
 	fn inside_room(&self, pos: IVec2) -> bool {
 		pos.cmpgt(self.top_left).all() && pos.cmplt(self.bottom_right).all()
+	}
+
+	pub fn center(&self) -> IVec2 {
+		(self.top_left + self.bottom_right) / 2
 	}
 }
 
@@ -282,7 +332,7 @@ impl FloorInfo {
 				continue;
 			}
 
-			if !rooms.iter().any(|room: &Room| {
+			if !rooms.par_iter().any(|room: &Room| {
 				// Don't let rooms be just one room apart, since moving through doors fro both
 				// rooms is annoying to the player Also don't let rooms collide w each other
 				const MIN_DISTANCE_BETWEEN_ROOMS: i32 = 2;
@@ -436,7 +486,7 @@ impl FloorInfo {
 			.flatten()
 			.collect();
 
-		rooms.iter_mut().for_each(|room| {
+		rooms.par_iter_mut().for_each(|room| {
 			let room_walls = room.generate_walls();
 
 			room_walls
@@ -475,6 +525,7 @@ impl FloorInfo {
 						is_floor: false,
 						items: Vec::new(),
 						trap: None,
+						..Default::default()
 					},
 					Object {
 						pos: IVec2::new(x, MAP_HEIGHT_TILES as i32),
@@ -484,6 +535,8 @@ impl FloorInfo {
 						is_floor: false,
 						items: Vec::new(),
 						trap: None,
+
+						..Default::default()
 					},
 				]
 				.into_iter()
@@ -498,6 +551,8 @@ impl FloorInfo {
 						is_floor: false,
 						items: Vec::new(),
 						trap: None,
+
+						..Default::default()
 					},
 					Object {
 						pos: IVec2::new(MAP_WIDTH_TILES as i32, y),
@@ -507,6 +562,8 @@ impl FloorInfo {
 						is_floor: false,
 						items: Vec::new(),
 						trap: None,
+
+						..Default::default()
 					},
 				]
 				.into_iter()
@@ -537,6 +594,8 @@ impl FloorInfo {
 						items: Vec::new(),
 						door: None,
 						trap: None,
+
+						..Default::default()
 					})
 				} else {
 					None
@@ -557,6 +616,7 @@ impl FloorInfo {
 				items: Vec::new(),
 				trap: None,
 				is_floor: true,
+				..Default::default()
 			})
 			.chain(rooms.iter().flat_map(|r| r.generate_floor(textures)))
 			.collect();
@@ -577,7 +637,7 @@ impl FloorInfo {
 
 		let mut objects: Vec<_> = (0..collidable_objects.len() + background_objects.len())
 			.into_iter()
-			.map(|_| MaybeUninit::uninit())
+			.map(|_| None)
 			.collect();
 
 		background_objects
@@ -586,18 +646,26 @@ impl FloorInfo {
 			.for_each(|obj| {
 				let new_obj =
 					&mut objects[(obj.pos.x + obj.pos.y * MAP_WIDTH_TILES as i32) as usize];
-				new_obj.write(obj);
+				*new_obj = Some(obj)
 			});
 
 		let objects = objects
 			.into_iter()
-			.map(|obj| unsafe { obj.assume_init() })
+			.enumerate()
+			.map(|(i, obj)| match obj {
+				Some(obj) => obj,
+				None => Object {
+					pos: IVec2::new((i % MAP_WIDTH_TILES) as i32, (i / MAP_HEIGHT_TILES) as i32),
+					texture: *textures.get("black.webp").unwrap(),
+					..Default::default()
+				},
+			})
 			.collect();
 
 		let floor = Floor { objects };
 
 		let mut floor_info = FloorInfo {
-			monster_types: vec![SmallRat::new],
+			monster_types: vec![SmallRat::new, GreenSlime::new],
 			spawn,
 			floor,
 			rooms,
@@ -609,6 +677,8 @@ impl FloorInfo {
 				trap: None,
 				items: Vec::new(),
 				is_floor: true,
+
+				..Default::default()
 			},
 			monsters: Vec::new(),
 		};
@@ -728,14 +798,22 @@ impl Floor {
 		})
 	}
 
-	pub fn find_path(
-		&self, pos: &dyn AsAABB, goal: &dyn AsAABB, only_visible: bool, randomness: Option<i32>,
+	pub fn find_path<S: AsAABB, G: AsAABB>(
+		&self, pos: &S, goal: &G, only_visible: bool, ignore_door_collision: bool,
+		randomness: Option<i32>,
 	) -> Option<Vec<Vec2>> {
-		find_path(pos, goal, self, only_visible, randomness)
+		find_path(
+			pos,
+			goal,
+			self,
+			only_visible,
+			ignore_door_collision,
+			randomness,
+		)
 	}
 
-	pub fn visible_objects_mut<'a>(
-		aabb: &dyn AsAABB, size: Option<i32>, objects: &'a mut [Object],
+	pub fn visible_objects_mut<'a, A: AsAABB>(
+		aabb: &A, size: Option<i32>, objects: &'a mut [Object],
 	) -> Vec<&'a Object> {
 		let center_tile = pos_to_tile(aabb);
 
@@ -772,7 +850,7 @@ impl Floor {
 			.collect()
 	}
 
-	pub fn visible_objects(&self, aabb: &dyn AsAABB, size: Option<i32>) -> Vec<&Object> {
+	pub fn visible_objects<A: AsAABB>(&self, aabb: &A, size: Option<i32>) -> Vec<&Object> {
 		let center_tile = pos_to_tile(aabb);
 
 		let edges = points_on_circumference(center_tile, size.unwrap_or(12));
@@ -859,7 +937,7 @@ impl Drawable for Object {
 
 fn find_viable_neighbors(
 	collidable_objects: &[Object], pos: IVec2, visible_objects: &Option<Vec<&Object>>,
-	_randomness: Option<i32>,
+	ignore_door_collision: bool, _randomness: Option<i32>,
 ) -> Vec<(IVec2, i32)> {
 	let change = IVec4::new(-1, -1, 1, 1);
 	let new_pos = IVec4::new(pos.x, pos.y, pos.x, pos.y) + change;
@@ -889,7 +967,10 @@ fn find_viable_neighbors(
 		})
 		.filter(
 			|pos| match get_object_from_pos_list(*pos, collidable_objects) {
-				Some(obj) => !obj.is_collidable(),
+				Some(obj) => match obj.is_collidable() {
+					true => ignore_door_collision && obj.door().is_some(),
+					false => true,
+				},
 				None => true,
 			},
 		)
@@ -897,8 +978,8 @@ fn find_viable_neighbors(
 		.collect()
 }
 
-pub fn find_path(
-	start: &dyn AsAABB, goal: &dyn AsAABB, floor: &Floor, only_visible: bool,
+pub fn find_path<S: AsAABB, G: AsAABB>(
+	start: &S, goal: &G, floor: &Floor, only_visible: bool, ignore_door_collision: bool,
 	randomness: Option<i32>,
 ) -> Option<Vec<Vec2>> {
 	let _aabb = start.as_aabb();
@@ -913,7 +994,15 @@ pub fn find_path(
 
 	let path = astar(
 		&start_tile_pos,
-		|pos| find_viable_neighbors(&floor.objects, *pos, &visible_objects, randomness),
+		|pos| {
+			find_viable_neighbors(
+				&floor.objects,
+				*pos,
+				&visible_objects,
+				ignore_door_collision,
+				randomness,
+			)
+		},
 		|pos| distance_squared(*pos, goal_tile_pos),
 		|pos| *pos == goal_tile_pos,
 	);
@@ -934,7 +1023,7 @@ pub fn distance_squared(pos1: IVec2, pos2: IVec2) -> i32 {
 }
 
 /// Convert from a game world position to a tile position
-pub fn pos_to_tile(obj: &dyn AsAABB) -> IVec2 {
+pub fn pos_to_tile<A: AsAABB>(obj: &A) -> IVec2 {
 	let center = obj.center();
 
 	(center / Vec2::splat(TILE_SIZE as f32)).floor().as_ivec2()
@@ -990,6 +1079,39 @@ pub fn trigger_traps(players: &mut [Player], floor_info: &mut FloorInfo, texture
 				};
 			}
 		});
+	});
+}
+
+fn apply_effect<E: Enchantable + ?Sized>(e: &mut E, effect: EffectType) {
+	let enchantment: Enchantment = effect.into();
+	e.apply_enchantment(enchantment);
+}
+
+pub fn set_effects(players: &mut [Player], floor_info: &mut FloorInfo, _textures: &Textures) {
+	floor_info.floor.objects.iter().for_each(|obj| {
+		obj.effects.keys().copied().for_each(|effect_type| {
+			players
+				.iter_mut()
+				.for_each(|player| apply_effect(player, effect_type));
+
+			floor_info
+				.monsters
+				.iter_mut()
+				.for_each(|monster| apply_effect(monster.as_mut(), effect_type));
+		});
+	});
+}
+
+pub fn update_effects(floor: &mut Floor) {
+	floor.objects.iter_mut().for_each(|obj| {
+		obj.effects.retain(|_effect_type, effect| {
+			if let Some(time_til_dissipate) = effect.time_til_dissipate.as_mut() {
+				*time_til_dissipate -= 1;
+				*time_til_dissipate != 0
+			} else {
+				true
+			}
+		})
 	});
 }
 
