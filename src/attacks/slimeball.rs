@@ -58,7 +58,7 @@ impl Attack for Slimeball {
 
 			damage_player(player, DAMAGE, direction, &floor_info.floor);
 			player.apply_enchantment(Enchantment {
-				kind: EnchantmentKind::Slimed,
+				kind: EnchantmentKind::Sticky,
 				strength: 2,
 			});
 
@@ -68,13 +68,9 @@ impl Attack for Slimeball {
 		false
 	}
 
-	fn cooldown(&self) -> u16 {
-		80
-	}
+	fn cooldown(&self) -> u16 { 80 }
 
-	fn mana_cost(&self) -> u16 {
-		0
-	}
+	fn mana_cost(&self) -> u16 { 0 }
 }
 
 impl AsAABB for Slimeball {
@@ -87,19 +83,11 @@ impl AsAABB for Slimeball {
 }
 
 impl Drawable for Slimeball {
-	fn pos(&self) -> Vec2 {
-		self.pos
-	}
+	fn pos(&self) -> Vec2 { self.pos }
 
-	fn size(&self) -> Vec2 {
-		SIZE
-	}
+	fn size(&self) -> Vec2 { SIZE }
 
-	fn rotation(&self) -> f32 {
-		self.angle
-	}
+	fn rotation(&self) -> f32 { self.angle }
 
-	fn texture(&self) -> Option<Texture2D> {
-		Some(self.texture)
-	}
+	fn texture(&self) -> Option<Texture2D> { Some(self.texture) }
 }

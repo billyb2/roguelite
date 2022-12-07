@@ -185,25 +185,6 @@ fn attack_mode(my_monster: &mut GreenSlime, players: &[Player], floor: &Floor) {
 
 		let obj = valid_objs.choose().unwrap();
 		my_monster.current_target = Some(Target::Pos(obj.pos()));
-
-		/*
-		let valid_rooms = floor
-			.objects()
-			.iter()
-			.filter(|obj| !obj.is_collidable())
-			.collect::<Vec<&Object>>();
-
-		let room = valid_rooms.choose().unwrap();
-
-		let room_center_pos = room.center();
-
-		my_monster.current_target = Some(Target::Pos(room_center_pos));
-		*/
-		/*
-		let path = floor.find_path(my_monster, obj, false, true, None).unwrap();
-
-		my_monster.current_path = Some((path, 1));
-		*/
 	}
 
 	step_pathfinding(my_monster, players, floor, 1.3);
@@ -251,25 +232,40 @@ impl Enchantable for GreenSlime {
 				self.health -= 1;
 			},
 			// I am a slime, lol
-			EnchantmentKind::Slimed => (),
+			EnchantmentKind::Sticky => (),
+			EnchantmentKind::Regenerating => {
+				self.enchantments.insert(
+					enchantment.kind,
+					Effect {
+						enchantment,
+						frames_left: 300,
+					},
+				);
+			},
 		};
 	}
 
 	fn update_enchantments(&mut self) {
 		self.enchantments.retain(|e_kind, effect| {
+			match e_kind {
+				EnchantmentKind::Blinded => {
+					self.attack_mode = AttackMode::Passive;
+					self.current_target = None;
+					self.current_path = None;
+				},
+				EnchantmentKind::Sticky => (),
+				EnchantmentKind::Regenerating => {
+					if self.health < MAX_HEALTH {
+						// Heal every half second
+						if effect.frames_left % (30 / effect.enchantment.strength) as u16 == 0 {
+							self.health += 1;
+						}
+					}
+				},
+			}
+
 			effect.frames_left = effect.frames_left.saturating_sub(1);
 			let removing_enchantment = effect.frames_left == 0;
-
-			if removing_enchantment {
-				match e_kind {
-					EnchantmentKind::Blinded => {
-						self.attack_mode = AttackMode::Passive;
-						self.current_target = None;
-						self.current_path = None;
-					},
-					EnchantmentKind::Slimed => (),
-				}
-			}
 
 			!removing_enchantment
 		});

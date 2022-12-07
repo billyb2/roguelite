@@ -4,15 +4,11 @@ mod small_rat;
 use std::collections::HashSet;
 
 use crate::attacks::Attack;
-use crate::draw::Drawable;
-use crate::draw::Textures;
-use crate::enchantments::Enchantable;
-use crate::enchantments::Enchantment;
-use crate::map::Floor;
-use crate::map::FloorInfo;
+use crate::draw::{Drawable, Textures};
+use crate::enchantments::{Enchantable, Enchantment};
+use crate::map::{Floor, FloorInfo};
 use crate::math::{AsAABB, AxisAlignedBoundingBox};
-use crate::player::DamageInfo;
-use crate::player::Player;
+use crate::player::{DamageInfo, Player};
 
 use macroquad::prelude::*;
 
@@ -23,7 +19,7 @@ pub use small_rat::*;
 #[derive(PartialEq, Eq, Hash)]
 struct Effect {
 	enchantment: Enchantment,
-	frames_left: u8,
+	frames_left: u16,
 }
 
 // All monsters are required to have a drawable AABB and be drawable

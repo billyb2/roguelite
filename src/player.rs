@@ -58,19 +58,35 @@ impl Display for Spell {
 	}
 }
 
+#[derive(Debug)]
+pub struct ItemSelectedInfo {
+	pub index: usize,
+	pub selection_type: SelectionType,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum SelectionType {
+	Hovered,
+	Selected,
+}
+
 pub struct PlayerInventory {
-	items: HashSet<ItemInfo>,
+	selected_item: Option<ItemSelectedInfo>,
+	pub items: Vec<ItemInfo>,
 }
 
 impl PlayerInventory {
 	fn new() -> Self {
 		Self {
-			items: HashSet::new(),
+			selected_item: None,
+			items: Vec::new(),
 		}
 	}
 
 	fn add_item(&mut self, item: ItemInfo) {
-		self.items.insert(item);
+		if !self.items.contains(&item) {
+			self.items.push(item);
+		}
 	}
 }
 
@@ -100,6 +116,7 @@ pub struct Player {
 	pub level: u32,
 
 	pub gold: u32,
+	in_inventory: bool,
 	pub inventory: PlayerInventory,
 
 	enchantments: HashMap<EnchantmentKind, (Enchantment, u16)>,
@@ -180,6 +197,7 @@ impl Player {
 			xp: 0,
 			level: 0,
 			gold: 0,
+			in_inventory: false,
 			inventory: PlayerInventory::new(),
 			enchantments: HashMap::new(),
 		}
@@ -206,6 +224,21 @@ impl Player {
 
 			println!("Leveled up!");
 		}
+	}
+
+	pub fn inventory(&self) -> &PlayerInventory {
+		&self.inventory
+	}
+
+	pub fn set_selected_item(&mut self, i: Option<ItemSelectedInfo>) {
+		self.inventory.selected_item = i;
+	}
+
+	pub fn get_item_selection_type(&self) -> Option<&SelectionType> {
+		self.inventory
+			.selected_item
+			.as_ref()
+			.map(|item_selected_info| &item_selected_info.selection_type)
 	}
 
 	/// Replace the first and last items in the spells Vec
@@ -244,7 +277,7 @@ pub fn move_player(player: &mut Player, angle: f32, speed: Option<Vec2>, floor_i
 	let direction: Vec2 = (angle.cos(), angle.sin()).into();
 	let distance = direction
 		* speed.unwrap_or_else(|| {
-			let speed_mul = match player.enchantments.get(&EnchantmentKind::Slimed) {
+			let speed_mul = match player.enchantments.get(&EnchantmentKind::Sticky) {
 				Some((enchantnment, _)) => 1.0 / enchantnment.strength as f32,
 				None => 1.0,
 			};
@@ -294,22 +327,25 @@ pub fn update_cooldowns(players: &mut [Player]) {
 		}
 	};
 
-	players.iter_mut().for_each(|p| {
-		if p.hp.points != 0 {
-			p.primary_cooldown = p.primary_cooldown.saturating_sub(1);
-			p.secondary_cooldown = p.secondary_cooldown.saturating_sub(1);
+	players.iter_mut().for_each(|player| {
+		if player.hp.points != 0 {
+			player.primary_cooldown = player.primary_cooldown.saturating_sub(1);
+			player.secondary_cooldown = player.secondary_cooldown.saturating_sub(1);
 
-			p.invincibility_frames = p.invincibility_frames.saturating_sub(1);
+			player.invincibility_frames = player.invincibility_frames.saturating_sub(1);
 
-			p.time_til_change_spell = p.time_til_change_spell.saturating_sub(1);
+			player.time_til_change_spell = player.time_til_change_spell.saturating_sub(1);
 
-			if p.changing_spell && p.time_til_change_spell == 0 && !p.spells.is_empty() {
-				p.cycle_spells();
-				p.changing_spell = false;
+			if player.changing_spell
+				&& player.time_til_change_spell == 0
+				&& !player.spells.is_empty()
+			{
+				player.cycle_spells();
+				player.changing_spell = false;
 			}
 
-			regen(&mut p.hp);
-			regen(&mut p.mp);
+			regen(&mut player.hp);
+			regen(&mut player.mp);
 		}
 	});
 }
@@ -319,8 +355,8 @@ pub fn player_attack(
 	attacks: &mut Vec<Box<dyn Attack>>, floor: &FloorInfo, is_primary: bool,
 ) {
 	let item = match is_primary {
-		true => player.primary_item,
-		false => player.secondary_item,
+		true => player.primary_item.clone(),
+		false => player.secondary_item.clone(),
 	};
 
 	if let Some(item) = item {
@@ -366,7 +402,8 @@ pub fn interact_with_door<A: AsAABB>(
 	// First, see if the player is in contact with a door
 	let entity_tile_pos = pos_to_tile(entity);
 
-	// Find all door that's within one tile distance of the player, then pick the closest one
+	// Find all door that's within one tile distance of the player, then pick the
+	// closest one
 
 	let door = floor_info
 		.floor
@@ -390,7 +427,8 @@ pub fn interact_with_door<A: AsAABB>(
 			let door = &door_obj.door().unwrap();
 			let door2 = &door2_obj.door().unwrap();
 
-			// First, depending on the action the player is taking, we can pretty easily decide of the player wants to open or close the door
+			// First, depending on the action the player is taking, we can pretty easily
+			// decide of the player wants to open or close the door
 			let door_will_be_affected = match door_interaction {
 				DoorInteraction::Opening => !door.is_open,
 				DoorInteraction::Closing => door.is_open,
@@ -462,14 +500,29 @@ impl Drawable for Player {
 impl Enchantable for Player {
 	fn apply_enchantment(&mut self, enchantment: Enchantment) {
 		if self.enchantments.get(&enchantment.kind).is_none() {
+			let enchantment_time = match enchantment.kind {
+				EnchantmentKind::Blinded => 60,
+				EnchantmentKind::Sticky => 60,
+				EnchantmentKind::Regenerating => 60 * 8,
+			};
+
 			self.enchantments
-				.insert(enchantment.kind, (enchantment, 60));
+				.insert(enchantment.kind, (enchantment, enchantment_time));
 		}
 	}
 
 	fn update_enchantments(&mut self) {
 		self.enchantments
-			.retain(|_enchantment_kind, (_enchantment, time_til_removal)| {
+			.retain(|enchantment_kind, (enchantment, time_til_removal)| {
+				// Regenerates the player's health every second
+				if *enchantment_kind == EnchantmentKind::Regenerating {
+					if *time_til_removal % (60 / enchantment.strength as u16) == 0 {
+						if self.hp.points < self.hp.max_points {
+							self.hp.points += 1;
+						}
+					}
+				}
+
 				*time_til_removal -= 1;
 				*time_til_removal != 0
 			});
@@ -497,4 +550,65 @@ pub fn pickup_items(player: &mut Player, floor: &mut Floor) {
 			_ => player.inventory.add_item(item),
 		};
 	}
+}
+
+pub fn toggle_inventory(player: &mut Player) {
+	player.in_inventory = !player.in_inventory;
+}
+
+pub const ITEM_INVENTORY_SIZE: Vec2 = Vec2::splat(50.0);
+
+pub fn item_pos_from_index(i: usize) -> Vec2 {
+	Vec2::new(100.0, 150.0)
+		+ ITEM_INVENTORY_SIZE
+		+ (UVec2::new(i as u32 % 10, i as u32 / 10) * ITEM_INVENTORY_SIZE.as_uvec2()).as_vec2()
+}
+
+pub fn draw_inventory(player: &Player) {
+	if !player.in_inventory {
+		return;
+	}
+
+	draw_rectangle(100.0, 100.0, 650.0, 450.0, LIGHTGRAY);
+	draw_rectangle_lines(100.0, 100.0, 650.0, 450.0, 15.0, DARKGRAY);
+
+	player
+		.inventory
+		.items
+		.iter()
+		.enumerate()
+		.for_each(|(i, item)| {
+			let texture = item.texture().unwrap();
+
+			let texture_params = DrawTextureParams {
+				rotation: item.rotation(),
+				flip_x: item.flip_x(),
+				dest_size: Some(ITEM_INVENTORY_SIZE),
+				..Default::default()
+			};
+
+			let item_pos = item_pos_from_index(i);
+
+			let color = match player
+				.inventory
+				.selected_item
+				.as_ref()
+				.map(|info| info.index)
+				== Some(i)
+			{
+				true => RED,
+				false => DARKGRAY,
+			};
+
+			draw_rectangle_lines(
+				item_pos.x,
+				item_pos.y,
+				ITEM_INVENTORY_SIZE.x,
+				ITEM_INVENTORY_SIZE.y,
+				8.0,
+				color,
+			);
+
+			draw_texture_ex(texture, item_pos.x, item_pos.y, WHITE, texture_params);
+		});
 }

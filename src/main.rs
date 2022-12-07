@@ -183,6 +183,7 @@ async fn main() {
 	root_ui().push_skin(&skin);
 
 	let mut visible_objects: Vec<Vec<Object>> = Vec::new();
+
 	loop {
 		while let Some(gilrs::Event {
 			id,
@@ -325,6 +326,7 @@ async fn main() {
 
 					visible_objects.iter().flatten().for_each(|o| {
 						o.draw();
+						o.items().iter().for_each(|i| i.draw());
 					});
 
 					// Draw all monsters on top of a visible object tile
@@ -338,6 +340,13 @@ async fn main() {
 
 					map.current_floor().exit().draw();
 
+					material.set_uniform("lowest_light_level", 0.6_f32);
+					visible_objects
+						.iter()
+						.flatten()
+						.flat_map(|o| o.items().iter())
+						.for_each(|i| i.draw());
+
 					material.set_uniform("lowest_light_level", 1.0_f32);
 
 					attacks.iter().for_each(|a| a.draw());
@@ -345,6 +354,10 @@ async fn main() {
 
 				gl_use_default_material();
 				players.iter().for_each(|p| p.draw());
+
+				// Draw UI
+				set_default_camera();
+				draw_inventory(player);
 
 				root_ui().label(
 					Vec2::new(

@@ -51,13 +51,9 @@ impl Attack for BlindingLight {
 		false
 	}
 
-	fn cooldown(&self) -> u16 {
-		60
-	}
+	fn cooldown(&self) -> u16 { 60 }
 
-	fn mana_cost(&self) -> u16 {
-		3
-	}
+	fn mana_cost(&self) -> u16 { 3 }
 
 	fn side_effects(&self, _player: &mut Player, _floor: &Floor) {}
 }
@@ -72,19 +68,11 @@ impl AsAABB for BlindingLight {
 }
 
 impl Drawable for BlindingLight {
-	fn pos(&self) -> Vec2 {
-		self.pos
-	}
+	fn pos(&self) -> Vec2 { self.pos }
 
-	fn size(&self) -> Vec2 {
-		SIZE
-	}
+	fn size(&self) -> Vec2 { SIZE }
 
-	fn rotation(&self) -> f32 {
-		self.angle
-	}
+	fn rotation(&self) -> f32 { self.angle }
 
-	fn texture(&self) -> Option<Texture2D> {
-		Some(self.texture)
-	}
+	fn texture(&self) -> Option<Texture2D> { Some(self.texture) }
 }

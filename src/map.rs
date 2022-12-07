@@ -1,26 +1,24 @@
 use std::borrow::Borrow;
 use std::collections::HashMap;
 
-
 use macroquad::prelude::*;
 use macroquad::rand;
 use macroquad::rand::*;
 use pathfinding::prelude::*;
 use rayon::prelude::*;
 
-use crate::draw::Drawable;
-use crate::draw::Textures;
-use crate::enchantments::Enchantable;
-use crate::enchantments::Enchantment;
-use crate::enchantments::EnchantmentKind;
-use crate::items::ItemInfo;
-use crate::items::ItemType;
-use crate::math::aabb_collision_dir;
-use crate::math::points_on_circumference;
-use crate::math::points_on_line;
-use crate::math::{aabb_collision, AsAABB, AxisAlignedBoundingBox};
-use crate::monsters::GreenSlime;
-use crate::monsters::{Monster, SmallRat};
+use crate::draw::{Drawable, Textures};
+use crate::enchantments::{Enchantable, Enchantment, EnchantmentKind};
+use crate::items::{ItemInfo, ItemType, PotionType};
+use crate::math::{
+	aabb_collision,
+	aabb_collision_dir,
+	points_on_circumference,
+	points_on_line,
+	AsAABB,
+	AxisAlignedBoundingBox,
+};
+use crate::monsters::{GreenSlime, Monster, SmallRat};
 use crate::player::Player;
 
 pub const TILE_SIZE: usize = 25;
@@ -57,7 +55,7 @@ impl Into<Enchantment> for EffectType {
 	fn into(self) -> Enchantment {
 		Enchantment {
 			strength: 1,
-			kind: EnchantmentKind::Slimed,
+			kind: EnchantmentKind::Sticky,
 		}
 	}
 }
@@ -90,15 +88,11 @@ impl Default for Object {
 }
 
 impl PartialEq for Object {
-	fn eq(&self, other: &Self) -> bool {
-		self.pos == other.pos
-	}
+	fn eq(&self, other: &Self) -> bool { self.pos == other.pos }
 }
 
 impl Object {
-	pub fn tile_pos(&self) -> IVec2 {
-		self.pos
-	}
+	pub fn tile_pos(&self) -> IVec2 { self.pos }
 
 	pub fn is_collidable(&self) -> bool {
 		if self.is_floor {
@@ -111,21 +105,13 @@ impl Object {
 		}
 	}
 
-	pub fn items(&self) -> &[ItemInfo] {
-		&self.items
-	}
+	pub fn items(&self) -> &[ItemInfo] { &self.items }
 
-	pub fn door(&self) -> &Option<Door> {
-		&self.door
-	}
+	pub fn door(&self) -> &Option<Door> { &self.door }
 
-	pub fn has_been_seen(&self) -> bool {
-		self.has_been_seen
-	}
+	pub fn has_been_seen(&self) -> bool { self.has_been_seen }
 
-	pub fn items_mut(&mut self) -> &mut Vec<ItemInfo> {
-		&mut self.items
-	}
+	pub fn items_mut(&mut self) -> &mut Vec<ItemInfo> { &mut self.items }
 
 	pub fn open_door(&mut self, textures: &Textures) {
 		if let Some(door) = &mut self.door {
@@ -160,13 +146,9 @@ pub struct Door {
 }
 
 impl Door {
-	pub fn open(&mut self) {
-		self.is_open = true;
-	}
+	pub fn open(&mut self) { self.is_open = true; }
 
-	pub fn close(&mut self) {
-		self.is_open = false;
-	}
+	pub fn close(&mut self) { self.is_open = false; }
 }
 
 pub struct Room {
@@ -176,9 +158,7 @@ pub struct Room {
 }
 
 impl Room {
-	pub fn extents(&self) -> (IVec2, IVec2) {
-		(self.top_left, self.bottom_right)
-	}
+	pub fn extents(&self) -> (IVec2, IVec2) { (self.top_left, self.bottom_right) }
 
 	fn generate_walls(&self) -> Vec<IVec2> {
 		(self.top_left.x..self.bottom_right.x)
@@ -257,9 +237,10 @@ impl Room {
 
 			let pos = IVec2::new(x, y);
 
-			if rand::gen_range(0, 50) == 25 {
+			if true {
+				//rand::gen_range(0, 50) == 25 {
 				items.push(ItemInfo::new(
-					ItemType::Gold(rand::gen_range(8, 20)),
+					ItemType::Potion(PotionType::Regeneration),
 					Some(pos),
 				));
 			}
@@ -291,14 +272,13 @@ impl Room {
 		pos.cmpgt(self.top_left).all() && pos.cmplt(self.bottom_right).all()
 	}
 
-	pub fn center(&self) -> IVec2 {
-		(self.top_left + self.bottom_right) / 2
-	}
+	pub fn center(&self) -> IVec2 { (self.top_left + self.bottom_right) / 2 }
 }
 
 pub struct FloorInfo {
 	spawn: Vec2,
 	monster_types: Vec<fn(&Textures, Vec2) -> Box<dyn Monster>>,
+	item_types: Vec<ItemType>,
 	pub monsters: Vec<Box<dyn Monster>>,
 	pub floor: Floor,
 	rooms: Vec<Room>,
@@ -318,8 +298,8 @@ impl FloorInfo {
 				rand::gen_range(0, MAP_WIDTH_TILES as i32),
 				rand::gen_range(0, MAP_HEIGHT_TILES as i32),
 			);
-			let bottom_right = top_left
-				+ IVec2::new(
+			let bottom_right = top_left +
+				IVec2::new(
 					rand::gen_range(MIN_SIZE, MAX_SIZE),
 					rand::gen_range(MIN_SIZE, MAX_SIZE),
 				);
@@ -494,10 +474,10 @@ impl FloorInfo {
 				.filter(|w| hallways.iter().any(|h| h == *w))
 				.for_each(|&door_pos| {
 					// Fix a bug where doors can pop up in the corners of rooms
-					if door_pos != room.top_left
-						&& door_pos != room.bottom_right
-						&& door_pos != IVec2::new(room.bottom_right.x, room.top_left.y)
-						&& door_pos != IVec2::new(room.top_left.x, room.bottom_right.y)
+					if door_pos != room.top_left &&
+						door_pos != room.bottom_right &&
+						door_pos != IVec2::new(room.bottom_right.x, room.top_left.y) &&
+						door_pos != IVec2::new(room.top_left.x, room.bottom_right.y)
 					{
 						room.doors.push(Door {
 							pos: door_pos,
@@ -633,7 +613,8 @@ impl FloorInfo {
 			.map(|r| (r.top_left + r.bottom_right) / 2)
 			.unwrap();
 
-		// let spawn = (exit_pos * IVec2::splat(TILE_SIZE as i32)).as_vec2() + Vec2::splat(TILE_SIZE as f32);
+		// let spawn = (exit_pos * IVec2::splat(TILE_SIZE as i32)).as_vec2() +
+		// Vec2::splat(TILE_SIZE as f32);
 
 		let mut objects: Vec<_> = (0..collidable_objects.len() + background_objects.len())
 			.into_iter()
@@ -665,7 +646,11 @@ impl FloorInfo {
 		let floor = Floor { objects };
 
 		let mut floor_info = FloorInfo {
-			monster_types: vec![SmallRat::new, GreenSlime::new],
+			monster_types: vec![SmallRat::new],
+			item_types: vec![
+				ItemType::Gold(20),
+				ItemType::Potion(PotionType::Regeneration),
+			],
 			spawn,
 			floor,
 			rooms,
@@ -688,9 +673,7 @@ impl FloorInfo {
 		floor_info
 	}
 
-	pub fn rooms(&self) -> &Vec<Room> {
-		&self.rooms
-	}
+	pub fn rooms(&self) -> &Vec<Room> { &self.rooms }
 
 	fn spawn_monsters(&mut self, textures: &Textures) {
 		// Choose every room that doesn't contain the spawn point
@@ -729,13 +712,9 @@ impl FloorInfo {
 			.any(|p| aabb_collision(p, &self.exit, Vec2::ZERO))
 	}
 
-	pub fn exit(&self) -> &Object {
-		&self.exit
-	}
+	pub fn exit(&self) -> &Object { &self.exit }
 
-	pub fn current_spawn(&self) -> Vec2 {
-		self.spawn
-	}
+	pub fn current_spawn(&self) -> Vec2 { self.spawn }
 }
 
 pub struct Floor {
@@ -876,13 +855,9 @@ impl Floor {
 		visible_objects
 	}
 
-	pub fn objects(&self) -> &[Object] {
-		&self.objects
-	}
+	pub fn objects(&self) -> &[Object] { &self.objects }
 
-	pub fn objects_mut(&mut self) -> &mut [Object] {
-		&mut self.objects
-	}
+	pub fn objects_mut(&mut self) -> &mut [Object] { &mut self.objects }
 }
 
 pub struct Map {
@@ -903,9 +878,7 @@ impl Map {
 		}
 	}
 
-	pub fn current_floor(&self) -> &FloorInfo {
-		&self.rooms[self.current_floor_index]
-	}
+	pub fn current_floor(&self) -> &FloorInfo { &self.rooms[self.current_floor_index] }
 
 	pub fn current_floor_mut(&mut self) -> &mut FloorInfo {
 		&mut self.rooms[self.current_floor_index]
@@ -922,17 +895,11 @@ impl Map {
 }
 
 impl Drawable for Object {
-	fn pos(&self) -> Vec2 {
-		self.pos.as_vec2() * Vec2::splat(TILE_SIZE as f32)
-	}
+	fn pos(&self) -> Vec2 { self.pos.as_vec2() * Vec2::splat(TILE_SIZE as f32) }
 
-	fn size(&self) -> Vec2 {
-		Vec2::splat(TILE_SIZE as f32)
-	}
+	fn size(&self) -> Vec2 { Vec2::splat(TILE_SIZE as f32) }
 
-	fn texture(&self) -> Option<Texture2D> {
-		Some(self.texture)
-	}
+	fn texture(&self) -> Option<Texture2D> { Some(self.texture) }
 }
 
 fn find_viable_neighbors(

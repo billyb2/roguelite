@@ -29,7 +29,7 @@ pub trait Drawable {
 					..Default::default()
 				};
 
-				draw_texture_ex(texture, pos.x, pos.y, WHITE, texture_params)
+				draw_texture_ex(texture, pos.x, pos.y, WHITE, texture_params);
 			},
 			None => draw_rectangle(pos.x, pos.y, size.x, size.y, RED),
 		};

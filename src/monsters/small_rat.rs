@@ -336,9 +336,10 @@ impl Enchantable for SmallRat {
 				self.current_path = None;
 				self.time_til_move = 50;
 			},
-			EnchantmentKind::Slimed => {
+			EnchantmentKind::Sticky => {
 				self.speed_mul = 0.5;
 			},
+			EnchantmentKind::Regenerating => (),
 		};
 
 		self.enchantments.insert(
@@ -352,6 +353,19 @@ impl Enchantable for SmallRat {
 
 	fn update_enchantments(&mut self) {
 		self.enchantments.retain(|e_kind, effect| {
+			match e_kind {
+				EnchantmentKind::Blinded => (),
+				EnchantmentKind::Sticky => (),
+				EnchantmentKind::Regenerating => {
+					if self.health < MAX_HEALTH {
+						// Heal every half second
+						if effect.frames_left % (30 / effect.enchantment.strength) as u16 == 0 {
+							self.health += 1;
+						}
+					}
+				},
+			};
+
 			effect.frames_left = effect.frames_left.saturating_sub(1);
 			let removing_enchantment = effect.frames_left == 0;
 
@@ -364,9 +378,10 @@ impl Enchantable for SmallRat {
 						self.current_target = None;
 						self.current_path = None;
 					},
-					EnchantmentKind::Slimed => {
+					EnchantmentKind::Sticky => {
 						self.speed_mul = 1.0;
 					},
+					EnchantmentKind::Regenerating => (),
 				}
 			}
 

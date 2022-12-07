@@ -1,9 +1,12 @@
 use crate::attacks::Attack;
 use crate::draw::Textures;
+use crate::items::use_item;
 use crate::map::FloorInfo;
-use crate::math::{get_angle, AsAABB};
+use crate::math::{get_angle, AsAABB, AxisAlignedBoundingBox};
 use crate::player::{
-	interact_with_door, move_player, pickup_items, player_attack, DoorInteraction, Player,
+	interact_with_door, item_pos_from_index, move_player, pickup_items, player_attack,
+	toggle_inventory, DoorInteraction, ItemSelectedInfo, Player, SelectionType,
+	ITEM_INVENTORY_SIZE,
 };
 use crate::NUM_PLAYERS;
 use gilrs::{Axis, Button, Gamepad};
@@ -57,6 +60,46 @@ pub fn movement_input(
 		},
 	);
 
+	if player.get_item_selection_type() != Some(&SelectionType::Selected) {
+		let mut possible_selected_item = (0..player.inventory().items.len()).find_map(|i| {
+			let pos = item_pos_from_index(i);
+			let aabb = AxisAlignedBoundingBox {
+				pos,
+				size: ITEM_INVENTORY_SIZE,
+			};
+
+			match aabb.within_aabb(mouse_pos) {
+				true => Some(ItemSelectedInfo {
+					index: i,
+					selection_type: match is_mouse_button_pressed(MouseButton::Left) {
+						true => SelectionType::Selected,
+						false => SelectionType::Hovered,
+					},
+				}),
+				false => None,
+			}
+		});
+
+		if let Some(selected_item) = &possible_selected_item {
+			if selected_item.selection_type == SelectionType::Selected {
+				let item = player
+					.inventory()
+					.items
+					.get(selected_item.index)
+					.unwrap()
+					.clone();
+
+				if let Some(use_item_fn) = use_item(&item.item_type) {
+					use_item_fn(&item, player, &mut floor_info.floor);
+					player.inventory.items.remove(selected_item.index);
+					possible_selected_item = None;
+				}
+			}
+		}
+
+		player.set_selected_item(possible_selected_item);
+	}
+
 	if is_mouse_button_down(MouseButton::Left) {
 		player_attack(player, index, textures, attacks, floor_info, true);
 	}
@@ -65,8 +108,12 @@ pub fn movement_input(
 		player_attack(player, index, textures, attacks, floor_info, false);
 	}
 
-	if is_key_down(KeyCode::P) {
+	if is_key_pressed(KeyCode::P) {
 		pickup_items(player, &mut floor_info.floor);
+	}
+
+	if is_key_pressed(KeyCode::I) {
+		toggle_inventory(player);
 	}
 
 	if x_movement != 0.0 || y_movement != 0.0 {

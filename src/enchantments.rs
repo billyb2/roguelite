@@ -1,13 +1,14 @@
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub enum EnchantmentKind {
 	Blinded,
-	Slimed,
+	Sticky,
+	Regenerating,
 }
 
 #[derive(PartialEq, Eq, Hash)]
 pub struct Enchantment {
 	pub kind: EnchantmentKind,
-	pub strength: u16,
+	pub strength: u8,
 }
 
 pub trait Enchantable {

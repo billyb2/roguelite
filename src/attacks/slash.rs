@@ -84,13 +84,9 @@ impl Attack for Slash {
 		false
 	}
 
-	fn cooldown(&self) -> u16 {
-		30
-	}
+	fn cooldown(&self) -> u16 { 30 }
 
-	fn mana_cost(&self) -> u16 {
-		0
-	}
+	fn mana_cost(&self) -> u16 { 0 }
 }
 
 impl AsAABB for Slash {
@@ -103,19 +99,11 @@ impl AsAABB for Slash {
 }
 
 impl Drawable for Slash {
-	fn pos(&self) -> Vec2 {
-		self.pos
-	}
+	fn pos(&self) -> Vec2 { self.pos }
 
-	fn size(&self) -> Vec2 {
-		SIZE
-	}
+	fn size(&self) -> Vec2 { SIZE }
 
-	fn rotation(&self) -> f32 {
-		self.angle
-	}
+	fn rotation(&self) -> f32 { self.angle }
 
-	fn texture(&self) -> Option<Texture2D> {
-		Some(self.texture)
-	}
+	fn texture(&self) -> Option<Texture2D> { Some(self.texture) }
 }

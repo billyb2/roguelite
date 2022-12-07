@@ -46,6 +46,11 @@ pub trait AsAABB {
 		let aabb = self.as_aabb();
 		aabb.pos + (aabb.size / 2.0)
 	}
+
+	fn within_aabb(&self, pos: Vec2) -> bool {
+		let aabb = self.as_aabb();
+		pos.cmpge(aabb.pos).all() && pos.cmple(aabb.pos + aabb.size).all()
+	}
 }
 
 pub fn aabb_collision<A: AsAABB, B: AsAABB>(aabb1: &A, aabb2: &B, distance: Vec2) -> bool {

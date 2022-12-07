@@ -1,14 +1,19 @@
 use macroquad::prelude::*;
+use once_cell::sync::Lazy;
 use std::fmt::Display;
 
-use crate::{
-	attacks::{Attack, BlindingLight, MagicMissile, Slash, Stab},
-	draw::{Drawable, Textures},
-	map::{FloorInfo, TILE_SIZE},
-	math::{AsAABB, AxisAlignedBoundingBox},
-	player::{Player, Spell},
-	TEXTURES,
-};
+use crate::attacks::{Attack, BlindingLight, MagicMissile, Slash, Stab};
+use crate::draw::{Drawable, Textures};
+use crate::enchantments::{Enchantable, Enchantment, EnchantmentKind};
+use crate::map::{Floor, FloorInfo, TILE_SIZE};
+use crate::math::{AsAABB, AxisAlignedBoundingBox};
+use crate::player::{Player, PlayerInventory, Spell};
+use crate::TEXTURES;
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum PotionType {
+	Regeneration,
+}
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum ItemType {
@@ -16,9 +21,15 @@ pub enum ItemType {
 	WizardsDagger,
 	WizardGlove,
 	Gold(u32),
+	Potion(PotionType),
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum ItemPos {
+	TilePos(IVec2),
+	InventoryPos(u8),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct ItemInfo {
 	cursed: bool,
 	pub item_type: ItemType,
@@ -42,6 +53,9 @@ impl ItemInfo {
 			ItemType::ShortSword => "A sturdy short sword, passed down from many generations.",
 			ItemType::WizardsDagger => "A dagger engraved with mystical runes",
 			ItemType::Gold(_) => "Gold! Currency! Can be used at shops to purchase items",
+			ItemType::Potion(potion_kind) => match potion_kind {
+				PotionType::Regeneration => "Helps the body to recover from damage",
+			},
 		}.to_string();
 
 		if self.cursed {
@@ -59,6 +73,12 @@ impl Display for ItemInfo {
 			ItemType::WizardGlove => "Wizard's Glove".to_string(),
 			ItemType::WizardsDagger => "Wizard's Dagger".to_string(),
 			ItemType::Gold(amt) => format!("{amt} gold"),
+			ItemType::Potion(potion_type) => format!(
+				"Potion of {}",
+				match potion_type {
+					PotionType::Regeneration => "Regeneration",
+				}
+			),
 		})
 	}
 }
@@ -106,6 +126,7 @@ pub fn attack_with_item(
 
 			attack
 		}),
+		ItemType::Potion(_) => None,
 		ItemType::Gold(_) => None,
 	}
 }
@@ -114,14 +135,17 @@ impl AsAABB for ItemInfo {
 	fn as_aabb(&self) -> AxisAlignedBoundingBox {
 		AxisAlignedBoundingBox {
 			pos: self.pos(),
-			size: Vec2::splat(32.0),
+			size: self.size(),
 		}
 	}
 }
 
 impl Drawable for ItemInfo {
 	fn size(&self) -> Vec2 {
-		Vec2::splat(32.0)
+		match self.item_type {
+			ItemType::Potion(_) => Vec2::splat(18.0),
+			_ => Vec2::splat(30.0),
+		}
 	}
 
 	fn pos(&self) -> Vec2 {
@@ -130,6 +154,39 @@ impl Drawable for ItemInfo {
 	}
 
 	fn texture(&self) -> Option<Texture2D> {
-		Some(*TEXTURES.get("gold.webp").unwrap())
+		Some(
+			*TEXTURES
+				.get(match self.item_type {
+					ItemType::Gold(_) => "gold.webp",
+					ItemType::Potion(potion) => match potion {
+						PotionType::Regeneration => "potion_of_regeneration.webp",
+					},
+					_ => "gold.webp",
+				})
+				.unwrap(),
+		)
+	}
+}
+
+type UseItemFn = Lazy<Box<dyn Fn(&ItemInfo, &mut Player, &mut Floor)>>;
+
+pub fn use_item(item_type: &ItemType) -> Option<UseItemFn> {
+	match item_type {
+		ItemType::Gold(_) => None,
+		ItemType::Potion(potion) => match potion {
+			PotionType::Regeneration => Some(Lazy::new(|| {
+				Box::new(
+					|_item: &ItemInfo, player: &mut Player, _floor: &mut Floor| {
+						player.apply_enchantment(Enchantment {
+							kind: EnchantmentKind::Regenerating,
+							strength: 1,
+						})
+					},
+				)
+			})),
+		},
+		ItemType::WizardGlove => None,
+		ItemType::WizardsDagger => None,
+		ItemType::ShortSword => None,
 	}
 }

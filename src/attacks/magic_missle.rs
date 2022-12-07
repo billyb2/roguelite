@@ -115,13 +115,9 @@ impl Attack for MagicMissile {
 		false
 	}
 
-	fn cooldown(&self) -> u16 {
-		45
-	}
+	fn cooldown(&self) -> u16 { 45 }
 
-	fn mana_cost(&self) -> u16 {
-		1
-	}
+	fn mana_cost(&self) -> u16 { 1 }
 }
 
 impl AsAABB for MagicMissile {
@@ -134,19 +130,11 @@ impl AsAABB for MagicMissile {
 }
 
 impl Drawable for MagicMissile {
-	fn pos(&self) -> Vec2 {
-		self.pos
-	}
+	fn pos(&self) -> Vec2 { self.pos }
 
-	fn size(&self) -> Vec2 {
-		SIZE
-	}
+	fn size(&self) -> Vec2 { SIZE }
 
-	fn rotation(&self) -> f32 {
-		self.angle
-	}
+	fn rotation(&self) -> f32 { self.angle }
 
-	fn texture(&self) -> Option<Texture2D> {
-		Some(self.texture)
-	}
+	fn texture(&self) -> Option<Texture2D> { Some(self.texture) }
 }
