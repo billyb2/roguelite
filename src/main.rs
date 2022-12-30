@@ -91,11 +91,11 @@ pub const NUM_PLAYERS: usize = 1;
 async fn main() {
 	let time = SystemTime::elapsed(&UNIX_EPOCH).unwrap().as_secs();
 	rand::srand(time);
-	print!("What player class are you? Warrior or Wizard?: ");
+	print!("What player class are you? Warrior, Wizard, or Rogue?: ");
 	io::stdout().flush().unwrap();
 
 	let mut class = String::new();
-	io::stdin().read_line(&mut class).unwrap();
+	// io::stdin().read_line(&mut class).unwrap();
 
 	class = class.to_lowercase();
 	class.pop();
@@ -326,7 +326,9 @@ async fn main() {
 
 					visible_objects.iter().flatten().for_each(|o| {
 						o.draw();
-						o.items().iter().for_each(|i| i.draw());
+						o.items().iter().rev().for_each(|item| {
+							item.draw();
+						});
 					});
 
 					// Draw all monsters on top of a visible object tile

@@ -7,15 +7,9 @@ pub type Textures = HashMap<String, Texture2D>;
 pub trait Drawable {
 	fn size(&self) -> Vec2;
 	fn pos(&self) -> Vec2;
-	fn rotation(&self) -> f32 {
-		0.0
-	}
-	fn texture(&self) -> Option<Texture2D> {
-		None
-	}
-	fn flip_x(&self) -> bool {
-		true
-	}
+	fn rotation(&self) -> f32 { 0.0 }
+	fn texture(&self) -> Option<Texture2D> { None }
+	fn flip_x(&self) -> bool { true }
 	fn draw(&self) {
 		let size = self.size();
 		let pos = self.pos();

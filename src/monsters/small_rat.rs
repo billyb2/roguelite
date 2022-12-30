@@ -91,9 +91,9 @@ impl Monster for SmallRat {
 			enchantment.1.frames_left /= 2;
 		});
 
-		let change = Vec2::new(damage_info.direction.cos(), damage_info.direction.sin())
-			* Vec2::splat(SIZE)
-			* Vec2::splat((damage_info.damage as f32 / MAX_HEALTH as f32).clamp(0.0, 0.8));
+		let change = Vec2::new(damage_info.direction.cos(), damage_info.direction.sin()) *
+			Vec2::splat(SIZE) *
+			Vec2::splat((damage_info.damage as f32 / MAX_HEALTH as f32).clamp(0.0, 0.8));
 
 		if !floor.collision(self, change) {
 			self.pos += change;
@@ -102,9 +102,7 @@ impl Monster for SmallRat {
 		self.damaged_by.insert(damage_info.player);
 	}
 
-	fn living(&self) -> bool {
-		self.health > 0
-	}
+	fn living(&self) -> bool { self.health > 0 }
 
 	fn xp(&self) -> (&HashSet<usize>, u32) {
 		const DEFAULT_XP: u32 = 1;
@@ -322,8 +320,8 @@ fn move_blindly(my_monster: &mut SmallRat, floor: &Floor) {
 		let direction = Vec2::new(rand::gen_range(-1.0, 1.0), rand::gen_range(-1.0, 1.0));
 
 		my_monster.current_target = Some(Target::Pos(
-			direction * Vec2::splat((TILE_SIZE * 2) as f32)
-				+ my_monster.pos + Vec2::splat(SIZE * 0.25),
+			direction * Vec2::splat((TILE_SIZE * 2) as f32) +
+				my_monster.pos + Vec2::splat(SIZE * 0.25),
 		));
 	}
 }
@@ -400,9 +398,7 @@ impl AsAABB for SmallRat {
 }
 
 impl Drawable for SmallRat {
-	fn pos(&self) -> Vec2 {
-		self.pos
-	}
+	fn pos(&self) -> Vec2 { self.pos }
 
 	fn size(&self) -> Vec2 {
 		match self.attack_mode {
@@ -411,11 +407,7 @@ impl Drawable for SmallRat {
 		}
 	}
 
-	fn flip_x(&self) -> bool {
-		true
-	}
+	fn flip_x(&self) -> bool { true }
 
-	fn texture(&self) -> Option<Texture2D> {
-		Some(self.texture)
-	}
+	fn texture(&self) -> Option<Texture2D> { Some(self.texture) }
 }

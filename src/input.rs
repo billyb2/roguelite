@@ -4,8 +4,16 @@ use crate::items::use_item;
 use crate::map::FloorInfo;
 use crate::math::{get_angle, AsAABB, AxisAlignedBoundingBox};
 use crate::player::{
-	interact_with_door, item_pos_from_index, move_player, pickup_items, player_attack,
-	toggle_inventory, DoorInteraction, ItemSelectedInfo, Player, SelectionType,
+	interact_with_door,
+	item_pos_from_index,
+	move_player,
+	pickup_items,
+	player_attack,
+	toggle_inventory,
+	DoorInteraction,
+	ItemSelectedInfo,
+	Player,
+	SelectionType,
 	ITEM_INVENTORY_SIZE,
 };
 use crate::NUM_PLAYERS;
@@ -51,8 +59,8 @@ pub fn movement_input(
 		match NUM_PLAYERS == 1 {
 			true => camera.world_to_screen(player.center()),
 			false => {
-				camera.world_to_screen(player.center())
-					+ Vec2::new(
+				camera.world_to_screen(player.center()) +
+					Vec2::new(
 						0.0,
 						(camera.viewport.unwrap().3 as f32) * (1.0 / NUM_PLAYERS as f32),
 					)

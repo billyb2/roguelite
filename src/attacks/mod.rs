@@ -3,6 +3,7 @@ mod magic_missle;
 mod slash;
 mod slimeball;
 mod stab;
+mod throwing_knife;
 
 use crate::draw::{Drawable, Textures};
 use crate::map::{Floor, FloorInfo};
@@ -15,6 +16,7 @@ pub use magic_missle::*;
 pub use slash::*;
 pub use slimeball::*;
 pub use stab::*;
+pub use throwing_knife::*;
 
 use macroquad::prelude::*;
 

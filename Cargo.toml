@@ -13,7 +13,7 @@ opt-level = 3
 debug = true
 
 [dependencies]
-macroquad = { git = "https://github.com/billyb2/macroquad", default-features = false }
+macroquad = { version = "0.3", default-features = false }
 gilrs = { version = "0.10" }
 once_cell = { version = "1" }
 rayon = { version = "1" }

@@ -40,16 +40,14 @@ pub trait Monster: AsAABB + Drawable + Send + Sync + Enchantable {
 	fn living(&self) -> bool;
 	/// The players to give XP to, and how much XP to give
 	fn xp(&self) -> (&HashSet<usize>, u32);
-	fn as_aabb_obj(&self) -> AxisAlignedBoundingBox {
-		self.as_aabb()
-	}
+	fn as_aabb_obj(&self) -> AxisAlignedBoundingBox { self.as_aabb() }
 }
 
 pub fn update_monsters(
 	players: &mut [Player], floor_info: &mut FloorInfo, attacks: &mut Vec<Box<dyn Attack>>,
 	textures: &Textures,
 ) {
-	floor_info.monsters.par_iter_mut().for_each(|m| {
+	floor_info.monsters.iter_mut().for_each(|m| {
 		// Only move monsters that are within a certain distance of any player
 		m.update_enchantments();
 		m.movement(players, &floor_info.floor);

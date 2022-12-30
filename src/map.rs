@@ -5,7 +5,6 @@ use macroquad::prelude::*;
 use macroquad::rand;
 use macroquad::rand::*;
 use pathfinding::prelude::*;
-use rayon::prelude::*;
 
 use crate::draw::{Drawable, Textures};
 use crate::enchantments::{Enchantable, Enchantment, EnchantmentKind};
@@ -237,8 +236,7 @@ impl Room {
 
 			let pos = IVec2::new(x, y);
 
-			if true {
-				//rand::gen_range(0, 50) == 25 {
+			if rand::gen_range(0, 50) == 25 {
 				items.push(ItemInfo::new(
 					ItemType::Potion(PotionType::Regeneration),
 					Some(pos),
@@ -312,7 +310,7 @@ impl FloorInfo {
 				continue;
 			}
 
-			if !rooms.par_iter().any(|room: &Room| {
+			if !rooms.iter().any(|room: &Room| {
 				// Don't let rooms be just one room apart, since moving through doors fro both
 				// rooms is annoying to the player Also don't let rooms collide w each other
 				const MIN_DISTANCE_BETWEEN_ROOMS: i32 = 2;
@@ -466,7 +464,7 @@ impl FloorInfo {
 			.flatten()
 			.collect();
 
-		rooms.par_iter_mut().for_each(|room| {
+		rooms.iter_mut().for_each(|room| {
 			let room_walls = room.generate_walls();
 
 			room_walls
@@ -722,6 +720,14 @@ pub struct Floor {
 }
 
 impl Floor {
+	pub fn add_item_to_object(&mut self, item: ItemInfo) {
+		let object = self
+			.get_object_from_pos_mut(item.tile_pos().unwrap())
+			.unwrap();
+
+		object.items.push(item);
+	}
+
 	pub fn get_object_from_pos(&self, pos: IVec2) -> Option<&Object> {
 		self.objects
 			.get((pos.x + pos.y * MAP_WIDTH_TILES as i32) as usize)
@@ -743,7 +749,7 @@ impl Floor {
 		self.collision_obj(aabb, distance).is_some()
 	}
 
-	pub fn collision_dir<A: AsAABB>(&self, aabb: &A, distance: Vec2) -> BVec2 {
+	pub fn collision_dir<A: AsAABB>(&self, aabb: &A, distance: Vec2) -> glam::BVec2 {
 		self.objects
 			.iter()
 			.filter_map(|object| {
@@ -759,9 +765,10 @@ impl Floor {
 					None
 				}
 			})
-			.fold(BVec2::splat(false), |collision_info, obj_collision_info| {
-				collision_info | obj_collision_info
-			})
+			.fold(
+				glam::BVec2::new(false, false),
+				|collision_info, obj_collision_info| collision_info | obj_collision_info,
+			)
 	}
 	pub fn doors(&mut self) -> impl Iterator<Item = &mut Object> {
 		self.objects.iter_mut().filter(|obj| obj.door.is_some())

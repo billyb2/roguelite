@@ -2,7 +2,7 @@ use macroquad::prelude::*;
 use once_cell::sync::Lazy;
 use std::fmt::Display;
 
-use crate::attacks::{Attack, BlindingLight, MagicMissile, Slash, Stab};
+use crate::attacks::{Attack, BlindingLight, MagicMissile, Slash, Stab, ThrownKnife};
 use crate::draw::{Drawable, Textures};
 use crate::enchantments::{Enchantable, Enchantment, EnchantmentKind};
 use crate::map::{Floor, FloorInfo, TILE_SIZE};
@@ -20,6 +20,7 @@ pub enum ItemType {
 	ShortSword,
 	WizardsDagger,
 	WizardGlove,
+	ThrowingKnife,
 	Gold(u32),
 	Potion(PotionType),
 }
@@ -35,6 +36,7 @@ pub struct ItemInfo {
 	pub item_type: ItemType,
 	// If there is no pos, it's in the player's inventory
 	tile_pos: Option<IVec2>,
+	pub stack_count: Option<u8>,
 }
 
 impl ItemInfo {
@@ -44,6 +46,11 @@ impl ItemInfo {
 			cursed: false,
 			item_type,
 			tile_pos,
+			stack_count: match item_type {
+				ItemType::ThrowingKnife => Some(1),
+				ItemType::Potion(_) => Some(1),
+				_ => None,
+			},
 		}
 	}
 
@@ -52,6 +59,7 @@ impl ItemInfo {
 			ItemType::WizardGlove => "A glove wielded by mighty sorcerers. Thiey alow magic users to directly tough the energy around them and manipulate it to their will.",
 			ItemType::ShortSword => "A sturdy short sword, passed down from many generations.",
 			ItemType::WizardsDagger => "A dagger engraved with mystical runes",
+			ItemType::ThrowingKnife => "A small but very sharp knife",
 			ItemType::Gold(_) => "Gold! Currency! Can be used at shops to purchase items",
 			ItemType::Potion(potion_kind) => match potion_kind {
 				PotionType::Regeneration => "Helps the body to recover from damage",
@@ -64,6 +72,8 @@ impl ItemInfo {
 
 		description
 	}
+
+	pub fn tile_pos(&self) -> Option<IVec2> { self.tile_pos }
 }
 
 impl Display for ItemInfo {
@@ -72,6 +82,7 @@ impl Display for ItemInfo {
 			ItemType::ShortSword => "Short Sword".to_string(),
 			ItemType::WizardGlove => "Wizard's Glove".to_string(),
 			ItemType::WizardsDagger => "Wizard's Dagger".to_string(),
+			ItemType::ThrowingKnife => "Throwing Knife".to_string(),
 			ItemType::Gold(amt) => format!("{amt} gold"),
 			ItemType::Potion(potion_type) => format!(
 				"Potion of {}",
@@ -126,6 +137,14 @@ pub fn attack_with_item(
 
 			attack
 		}),
+		ItemType::ThrowingKnife => Some(ThrownKnife::new(
+			player,
+			index,
+			player.angle,
+			textures,
+			&floor.floor,
+			primary_attack,
+		)),
 		ItemType::Potion(_) => None,
 		ItemType::Gold(_) => None,
 	}
@@ -149,8 +168,8 @@ impl Drawable for ItemInfo {
 	}
 
 	fn pos(&self) -> Vec2 {
-		(self.tile_pos.unwrap_or(IVec2::ZERO) * IVec2::splat(TILE_SIZE as i32)).as_vec2()
-			+ self.size() / 2.0
+		(self.tile_pos.unwrap_or(IVec2::ZERO) * IVec2::splat(TILE_SIZE as i32)).as_vec2() +
+			self.size() / 2.0
 	}
 
 	fn texture(&self) -> Option<Texture2D> {
@@ -161,6 +180,7 @@ impl Drawable for ItemInfo {
 					ItemType::Potion(potion) => match potion {
 						PotionType::Regeneration => "potion_of_regeneration.webp",
 					},
+					ItemType::ThrowingKnife => "throwing_knife.webp",
 					_ => "gold.webp",
 				})
 				.unwrap(),
@@ -185,6 +205,7 @@ pub fn use_item(item_type: &ItemType) -> Option<UseItemFn> {
 				)
 			})),
 		},
+		ItemType::ThrowingKnife => None,
 		ItemType::WizardGlove => None,
 		ItemType::WizardsDagger => None,
 		ItemType::ShortSword => None,

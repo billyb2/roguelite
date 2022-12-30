@@ -16,6 +16,7 @@ pub const PLAYER_SIZE: f32 = 12.0;
 pub enum PlayerClass {
 	Warrior,
 	Wizard,
+	Rogue,
 }
 
 pub struct PlayerClassError;
@@ -71,21 +72,38 @@ pub enum SelectionType {
 }
 
 pub struct PlayerInventory {
+	primary_item: Option<ItemInfo>,
+	secondary_item: Option<ItemInfo>,
 	selected_item: Option<ItemSelectedInfo>,
 	pub items: Vec<ItemInfo>,
 }
 
 impl PlayerInventory {
-	fn new() -> Self {
+	fn new(primary_item: Option<ItemInfo>, secondary_item: Option<ItemInfo>) -> Self {
 		Self {
+			primary_item,
+			secondary_item,
 			selected_item: None,
 			items: Vec::new(),
 		}
 	}
 
-	fn add_item(&mut self, item: ItemInfo) {
-		if !self.items.contains(&item) {
-			self.items.push(item);
+	fn add_item(&mut self, new_item: ItemInfo) {
+		if new_item.stack_count.is_some() {
+			if let Some(existing_item) = self
+				.items
+				.iter_mut()
+				.chain(
+					[&mut self.primary_item, &mut self.secondary_item]
+						.into_iter()
+						.filter_map(|item| item.as_mut()),
+				)
+				.find(|item| item.item_type == new_item.item_type)
+			{
+				existing_item.stack_count = Some(existing_item.stack_count.unwrap() + 1);
+			}
+		} else {
+			self.items.push(new_item);
 		}
 	}
 }
@@ -100,9 +118,6 @@ pub struct Player {
 	/// The ability to resist magical enchantments
 	willpower: u16,
 	invincibility_frames: u16,
-
-	pub primary_item: Option<ItemInfo>,
-	pub secondary_item: Option<ItemInfo>,
 
 	pub primary_cooldown: u16,
 	pub secondary_cooldown: u16,
@@ -127,6 +142,12 @@ impl Player {
 		let primary_item = Some(match class {
 			PlayerClass::Warrior => ItemInfo::new(ShortSword, None),
 			PlayerClass::Wizard => ItemInfo::new(WizardGlove, None),
+			PlayerClass::Rogue => {
+				let mut item = ItemInfo::new(ThrowingKnife, None);
+				item.stack_count = Some(5);
+
+				item
+			},
 		});
 
 		let secondary_item = match class {
@@ -149,13 +170,21 @@ impl Player {
 				regen_rate: 15 * 60,
 				..Default::default()
 			},
+
+			PlayerClass::Rogue => PointInfo {
+				points: 20,
+				max_points: 20,
+				// 15 seconds
+				regen_rate: 15 * 60,
+				..Default::default()
+			},
 		};
 
 		let mp = match class {
 			PlayerClass::Wizard => PointInfo {
 				points: 6,
 				max_points: 6,
-				// 8 seconds
+				// 7 seconds
 				regen_rate: 7 * 60,
 				..Default::default()
 			},
@@ -163,7 +192,13 @@ impl Player {
 				points: 3,
 				max_points: 3,
 				// 10 seconds
-				regen_rate: 8 * 60,
+				regen_rate: 10 * 60,
+				..Default::default()
+			},
+			PlayerClass::Rogue => PointInfo {
+				points: 4,
+				max_points: 4,
+				regen_rate: 9 * 60,
 				..Default::default()
 			},
 		};
@@ -171,10 +206,12 @@ impl Player {
 		let willpower = match class {
 			PlayerClass::Wizard => 20,
 			PlayerClass::Warrior => 10,
+			PlayerClass::Rogue => 15,
 		};
 
 		let spells = match class {
 			PlayerClass::Warrior => Vec::new(),
+			PlayerClass::Rogue => Vec::new(),
 			PlayerClass::Wizard => vec![Spell::MagicMissile, Spell::BlindingLight],
 		};
 
@@ -189,8 +226,6 @@ impl Player {
 			mp,
 			willpower,
 			invincibility_frames: 0,
-			primary_item,
-			secondary_item,
 			spells,
 			changing_spell: false,
 			time_til_change_spell: 0,
@@ -198,7 +233,7 @@ impl Player {
 			level: 0,
 			gold: 0,
 			in_inventory: false,
-			inventory: PlayerInventory::new(),
+			inventory: PlayerInventory::new(primary_item, secondary_item),
 			enchantments: HashMap::new(),
 		}
 	}
@@ -354,21 +389,36 @@ pub fn player_attack(
 	player: &mut Player, index: Option<usize>, textures: &Textures,
 	attacks: &mut Vec<Box<dyn Attack>>, floor: &FloorInfo, is_primary: bool,
 ) {
+	let cooldown = match is_primary {
+		true => &player.primary_cooldown,
+		false => &player.secondary_cooldown,
+	};
+
+	if *cooldown != 0 {
+		return;
+	}
+
 	let item = match is_primary {
-		true => player.primary_item.clone(),
-		false => player.secondary_item.clone(),
+		true => &mut player.inventory.primary_item,
+		false => &mut player.inventory.secondary_item,
 	};
 
 	if let Some(item) = item {
-		if let Some(attack) = attack_with_item(item, player, index, textures, floor, is_primary) {
+		if item.item_type == ItemType::ThrowingKnife {
+			if item.stack_count.unwrap() > 0 {
+				item.stack_count = Some(item.stack_count.unwrap() - 1);
+			} else {
+				return;
+			}
+		}
+
+		if let Some(attack) =
+			attack_with_item(item.clone(), player, index, textures, floor, is_primary)
+		{
 			let cooldown = match is_primary {
 				true => &mut player.primary_cooldown,
 				false => &mut player.secondary_cooldown,
 			};
-
-			if *cooldown != 0 {
-				return;
-			}
 
 			if player.mp.points >= attack.mana_cost() {
 				player.mp.points -= attack.mana_cost();

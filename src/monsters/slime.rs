@@ -110,9 +110,7 @@ impl Monster for GreenSlime {
 		self.damaged_by.insert(damage_info.player);
 	}
 
-	fn living(&self) -> bool {
-		self.health > 0
-	}
+	fn living(&self) -> bool { self.health > 0 }
 
 	fn xp(&self) -> (&HashSet<usize>, u32) {
 		const DEFAULT_XP: u32 = 2;
@@ -282,15 +280,9 @@ impl AsAABB for GreenSlime {
 }
 
 impl Drawable for GreenSlime {
-	fn pos(&self) -> Vec2 {
-		self.pos
-	}
+	fn pos(&self) -> Vec2 { self.pos }
 
-	fn size(&self) -> Vec2 {
-		Vec2::splat(SIZE)
-	}
+	fn size(&self) -> Vec2 { Vec2::splat(SIZE) }
 
-	fn texture(&self) -> Option<Texture2D> {
-		Some(self.texture)
-	}
+	fn texture(&self) -> Option<Texture2D> { Some(self.texture) }
 }
