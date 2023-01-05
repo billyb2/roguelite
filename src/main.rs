@@ -101,7 +101,7 @@ async fn main() {
 	class.pop();
 
 	let class = match class.is_empty() {
-		true => PlayerClass::Wizard,
+		true => PlayerClass::Warrior,
 		false => match class.as_str().try_into() {
 			Ok(class) => class,
 			Err(_) => panic!("Invalid class given: {class}"),

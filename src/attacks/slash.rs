@@ -1,3 +1,5 @@
+use std::f32::consts::PI;
+
 use crate::draw::{Drawable, Textures};
 use crate::map::{Floor, FloorInfo};
 use crate::math::{aabb_collision, get_angle, AsAABB, AxisAlignedBoundingBox};
@@ -6,7 +8,8 @@ use macroquad::prelude::*;
 
 use super::Attack;
 
-const SIZE: Vec2 = Vec2::new(10.0, 15.0);
+const SIZE: Vec2 = Vec2::new(15.0, 20.0);
+const SWING_TIME: u16 = 10;
 
 pub struct Slash {
 	pos: Vec2,
@@ -22,41 +25,30 @@ impl Attack for Slash {
 		aabb: &dyn AsAABB, index: Option<usize>, angle: f32, textures: &Textures, _floor: &Floor,
 		_is_primary: bool,
 	) -> Box<Self> {
+		let angle = angle + (PI * 0.33);
 		Box::new(Self {
-			pos: aabb.center(),
+			pos: aabb.aabb_pos(),
 			angle,
-			texture: *textures.get("slash.webp").unwrap(),
+			texture: *textures.get("sword.webp").unwrap(),
 			time: 0,
 			player_index: index.unwrap(),
 			num_piercings: 0,
 		})
 	}
 
-	fn side_effects(&self, player: &mut Player, floor: &Floor) {
-		let change = Vec2::new(self.angle.cos(), self.angle.sin()) * PLAYER_SIZE;
+	fn side_effects(&self, _player: &mut Player, _floor: &Floor) {}
 
-		if !floor.collision(player, change) {
-			player.pos += change;
-		}
-	}
+	fn update(&mut self, floor_info: &mut FloorInfo, players: &mut [Player]) -> bool {
+		self.time += 1;
 
-	fn update(&mut self, floor_info: &mut FloorInfo, _players: &mut [Player]) -> bool {
-		let movement = Vec2::new(self.angle.cos(), self.angle.sin()) * 6.0;
-
-		if !floor_info.floor.collision(self, movement) {
-			self.pos += movement;
-			self.time += 1;
-		} else {
+		if self.time >= SWING_TIME {
 			return true;
 		}
 
-		if self.time >= 10 {
-			return true;
-		}
+		self.angle -= 0.2;
+		let movement = Vec2::new(self.angle.cos(), self.angle.sin()) * PLAYER_SIZE * 2.0;
 
-		if self.num_piercings >= 6 {
-			return true;
-		}
+		self.pos = players[self.player_index].aabb_pos() + movement;
 
 		let aabb = self.as_aabb();
 
@@ -67,7 +59,7 @@ impl Attack for Slash {
 			.filter(|m| aabb_collision(&aabb, &m.as_aabb(), Vec2::ZERO))
 			.for_each(|monster| {
 				// Damage is low bc of hitting enemies multiple times
-				const DAMAGE: u16 = 5;
+				const DAMAGE: u16 = 4;
 
 				let direction = get_angle(monster.pos(), self.pos);
 				let damage_info = DamageInfo {
@@ -84,9 +76,13 @@ impl Attack for Slash {
 		false
 	}
 
-	fn cooldown(&self) -> u16 { 30 }
+	fn cooldown(&self) -> u16 {
+		SWING_TIME * 3
+	}
 
-	fn mana_cost(&self) -> u16 { 0 }
+	fn mana_cost(&self) -> u16 {
+		0
+	}
 }
 
 impl AsAABB for Slash {
@@ -99,11 +95,23 @@ impl AsAABB for Slash {
 }
 
 impl Drawable for Slash {
-	fn pos(&self) -> Vec2 { self.pos }
+	fn pos(&self) -> Vec2 {
+		self.pos
+	}
 
-	fn size(&self) -> Vec2 { SIZE }
+	fn size(&self) -> Vec2 {
+		SIZE
+	}
 
-	fn rotation(&self) -> f32 { self.angle }
+	fn rotation(&self) -> f32 {
+		self.angle
+	}
 
-	fn texture(&self) -> Option<Texture2D> { Some(self.texture) }
+	fn flip_x(&self) -> bool {
+		false
+	}
+
+	fn texture(&self) -> Option<Texture2D> {
+		Some(self.texture)
+	}
 }

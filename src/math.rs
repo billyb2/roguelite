@@ -47,6 +47,11 @@ pub trait AsAABB {
 		aabb.pos + (aabb.size / 2.0)
 	}
 
+	fn aabb_pos(&self) -> Vec2 {
+		let aabb = self.as_aabb();
+		aabb.pos
+	}
+
 	fn within_aabb(&self, pos: Vec2) -> bool {
 		let aabb = self.as_aabb();
 		pos.cmpge(aabb.pos).all() && pos.cmple(aabb.pos + aabb.size).all()
