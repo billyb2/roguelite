@@ -8,7 +8,7 @@ mod throwing_knife;
 use crate::draw::{Drawable, Textures};
 use crate::map::{Floor, FloorInfo};
 
-use crate::math::AsAABB;
+use crate::math::{AsPolygon, Polygon};
 use crate::player::Player;
 
 pub use blinding_light::*;
@@ -23,7 +23,7 @@ use macroquad::prelude::*;
 pub trait Attack: Drawable + Send + Sync {
 	/// Just gives some information about the attack
 	fn new(
-		player: &dyn AsAABB, player_index: Option<usize>, angle: f32, textures: &Textures,
+		player: &dyn AsPolygon, player_index: Option<usize>, angle: f32, textures: &Textures,
 		floor: &Floor, is_primary: bool,
 	) -> Box<Self>
 	where
@@ -34,6 +34,7 @@ pub trait Attack: Drawable + Send + Sync {
 	// Returns whether or not the attack should be destroyed
 	fn update(&mut self, floor: &mut FloorInfo, players: &mut [Player]) -> bool;
 	fn cooldown(&self) -> u16;
+	fn as_polygon_optional(&self) -> Option<Polygon> { None }
 }
 
 pub fn update_attacks(

@@ -2,7 +2,7 @@ use crate::attacks::Attack;
 use crate::draw::Textures;
 use crate::items::use_item;
 use crate::map::FloorInfo;
-use crate::math::{get_angle, AsAABB, AxisAlignedBoundingBox};
+use crate::math::{easy_polygon, get_angle, point_in_polygon, AsPolygon};
 use crate::player::{
 	interact_with_door,
 	item_pos_from_index,
@@ -71,12 +71,11 @@ pub fn movement_input(
 	if player.get_item_selection_type() != Some(&SelectionType::Selected) {
 		let mut possible_selected_item = (0..player.inventory().items.len()).find_map(|i| {
 			let pos = item_pos_from_index(i);
-			let aabb = AxisAlignedBoundingBox {
-				pos,
-				size: ITEM_INVENTORY_SIZE,
-			};
+			const HALF_INVENTORY_SIZE: Vec2 =
+				Vec2::new(ITEM_INVENTORY_SIZE.x * 0.5, ITEM_INVENTORY_SIZE.y * 0.5);
+			let polygon = easy_polygon(pos + HALF_INVENTORY_SIZE, HALF_INVENTORY_SIZE, 0.0);
 
-			match aabb.within_aabb(mouse_pos) {
+			match point_in_polygon(&polygon, mouse_pos) {
 				true => Some(ItemSelectedInfo {
 					index: i,
 					selection_type: match is_mouse_button_pressed(MouseButton::Left) {

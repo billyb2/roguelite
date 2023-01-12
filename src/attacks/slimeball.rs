@@ -1,12 +1,13 @@
 use crate::draw::{Drawable, Textures};
 use crate::enchantments::{Enchantable, Enchantment, EnchantmentKind};
 use crate::map::{Floor, FloorInfo};
-use crate::math::{aabb_collision, get_angle, AsAABB, AxisAlignedBoundingBox};
+use crate::math::{aabb_collision, easy_polygon, get_angle, AsPolygon, Polygon};
 use crate::player::{damage_player, Player};
 use macroquad::prelude::*;
 
 use super::Attack;
 
+const HALF_SIZE: Vec2 = Vec2::new(7.5, 2.5);
 const SIZE: Vec2 = Vec2::new(15.0, 5.0);
 
 pub struct Slimeball {
@@ -18,8 +19,8 @@ pub struct Slimeball {
 
 impl Attack for Slimeball {
 	fn new(
-		aabb: &dyn AsAABB, _index: Option<usize>, angle: f32, textures: &Textures, _floor: &Floor,
-		_is_primary: bool,
+		aabb: &dyn AsPolygon, _index: Option<usize>, angle: f32, textures: &Textures,
+		_floor: &Floor, _is_primary: bool,
 	) -> Box<Self> {
 		Box::new(Self {
 			pos: aabb.center(),
@@ -45,12 +46,12 @@ impl Attack for Slimeball {
 			return true;
 		}
 
-		let aabb = self.as_aabb();
+		let poly = self.as_polygon();
 
 		// Check to see if it's collided with a player
 		if let Some(player) = players
 			.iter_mut()
-			.find(|p| aabb_collision(&aabb, &p.as_aabb(), Vec2::ZERO))
+			.find(|p| aabb_collision(&poly, &p.as_polygon(), Vec2::ZERO))
 		{
 			const DAMAGE: u16 = 6;
 
@@ -73,13 +74,8 @@ impl Attack for Slimeball {
 	fn mana_cost(&self) -> u16 { 0 }
 }
 
-impl AsAABB for Slimeball {
-	fn as_aabb(&self) -> AxisAlignedBoundingBox {
-		AxisAlignedBoundingBox {
-			pos: self.pos,
-			size: SIZE,
-		}
-	}
+impl AsPolygon for Slimeball {
+	fn as_polygon(&self) -> Polygon { easy_polygon(self.pos + HALF_SIZE, HALF_SIZE, 0.0) }
 }
 
 impl Drawable for Slimeball {

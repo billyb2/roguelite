@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use crate::draw::{Drawable, Textures};
 use crate::enchantments::{Enchantable, Enchantment, EnchantmentKind};
 use crate::map::{pos_to_tile, Floor, Object, TILE_SIZE};
-use crate::math::{aabb_collision, get_angle, AsAABB, AxisAlignedBoundingBox};
+use crate::math::{aabb_collision, easy_polygon, get_angle, AsPolygon, Polygon};
 use crate::monsters::Monster;
 use crate::player::{damage_player, DamageInfo, Player};
 
@@ -129,14 +129,14 @@ fn step_pathfinding<T: Fn(&mut SmallRat) -> Target>(
 	if my_monster.time_til_move == 0 {
 		if my_monster.current_path.is_none() {
 			if let Some(target) = my_monster.current_target {
-				let goal_aabb: AxisAlignedBoundingBox = match target {
-					Target::Pos(pos) => AxisAlignedBoundingBox {
-						pos,
-						size: Vec2::splat(TILE_SIZE as f32),
+				let goal_aabb: Polygon = match target {
+					Target::Pos(pos) => {
+						const HALF_TILE_SIZE: Vec2 = Vec2::splat((TILE_SIZE / 2) as f32);
+						easy_polygon(pos + HALF_TILE_SIZE, HALF_TILE_SIZE, 0.0)
 					},
 					Target::PlayerIndex(i) => {
 						let player = &players[i];
-						player.as_aabb()
+						player.as_polygon()
 					},
 				};
 
@@ -388,12 +388,10 @@ impl Enchantable for SmallRat {
 	}
 }
 
-impl AsAABB for SmallRat {
-	fn as_aabb(&self) -> AxisAlignedBoundingBox {
-		AxisAlignedBoundingBox {
-			pos: self.pos,
-			size: self.size(),
-		}
+impl AsPolygon for SmallRat {
+	fn as_polygon(&self) -> Polygon {
+		const HALF_SIZE: Vec2 = Vec2::splat(SIZE * 0.5);
+		easy_polygon(self.pos + HALF_SIZE, HALF_SIZE, 0.0)
 	}
 }
 

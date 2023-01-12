@@ -1,11 +1,12 @@
 use crate::draw::{Drawable, Textures};
 use crate::map::{Floor, FloorInfo};
-use crate::math::{aabb_collision, get_angle, AsAABB, AxisAlignedBoundingBox};
+use crate::math::{aabb_collision, easy_polygon, get_angle, AsPolygon, Polygon};
 use crate::player::{DamageInfo, Player, PLAYER_SIZE};
 use macroquad::prelude::*;
 
 use super::Attack;
 
+const HALF_SIZE: Vec2 = Vec2::new(7.5, 2.5);
 const SIZE: Vec2 = Vec2::new(15.0, 5.0);
 
 pub struct Stab {
@@ -19,8 +20,8 @@ pub struct Stab {
 
 impl Attack for Stab {
 	fn new(
-		aabb: &dyn AsAABB, index: Option<usize>, angle: f32, textures: &Textures, _floor: &Floor,
-		_is_primary: bool,
+		aabb: &dyn AsPolygon, index: Option<usize>, angle: f32, textures: &Textures,
+		_floor: &Floor, _is_primary: bool,
 	) -> Box<Self> {
 		Box::new(Self {
 			pos: aabb.center(),
@@ -54,13 +55,13 @@ impl Attack for Stab {
 			return true;
 		}
 
-		let aabb = self.as_aabb();
+		let aabb = self.as_polygon();
 
 		// Check to see if it's collided with a monster
 		if let Some(monster) = floor_info
 			.monsters
 			.iter_mut()
-			.find(|m| aabb_collision(&aabb, &m.as_aabb(), Vec2::ZERO))
+			.find(|m| aabb_collision(&aabb, &m.as_polygon(), Vec2::ZERO))
 		{
 			// Damage is low bc of hitting enemies multiple times
 			const DAMAGE: u16 = 25;
@@ -85,13 +86,8 @@ impl Attack for Stab {
 	fn mana_cost(&self) -> u16 { 0 }
 }
 
-impl AsAABB for Stab {
-	fn as_aabb(&self) -> AxisAlignedBoundingBox {
-		AxisAlignedBoundingBox {
-			pos: self.pos,
-			size: SIZE,
-		}
-	}
+impl AsPolygon for Stab {
+	fn as_polygon(&self) -> Polygon { easy_polygon(self.pos + HALF_SIZE, HALF_SIZE, self.angle) }
 }
 
 impl Drawable for Stab {

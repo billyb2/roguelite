@@ -7,88 +7,155 @@ pub fn get_angle(c: Vec2, e: Vec2) -> f32 {
 	d.y.atan2(d.x)
 }
 
-#[derive(Clone)]
-pub struct AxisAlignedBoundingBox {
-	pub pos: Vec2,
-	pub size: Vec2,
+enum Orientation {
+	Colinear,
+	Clockwise,
+	CounterClockwise,
 }
 
-impl AsAABB for AxisAlignedBoundingBox {
-	fn as_aabb(&self) -> AxisAlignedBoundingBox {
-		self.clone()
+#[derive(Copy, Clone)]
+struct Line {
+	point1: Vec2,
+	point2: Vec2,
+}
+
+fn ccw(point1: Vec2, point2: Vec2, point3: Vec2) -> bool {
+	(point3.y - point1.y) * (point2.x - point1.x) > (point2.y - point1.y) * (point3.x - point1.x)
+}
+
+impl Line {
+	fn intersect(&self, line2: &Line) -> bool {
+		ccw(self.point1, line2.point1, line2.point2) != ccw(self.point2, line2.point1, line2.point2) &&
+			ccw(self.point1, self.point2, line2.point1) !=
+				ccw(self.point1, self.point2, line2.point2)
 	}
 }
 
-impl Drawable for AxisAlignedBoundingBox {
-	fn pos(&self) -> Vec2 {
-		self.pos
-	}
+impl Line {
+	fn new(point1: Vec2, point2: Vec2) -> Self { Self { point1, point2 } }
+}
 
-	fn size(&self) -> Vec2 {
-		self.size
+#[derive(Clone, Copy)]
+pub struct Polygon {
+	center: Vec2,
+	lines: [Line; 4],
+}
+
+impl Polygon {
+	fn shift(&mut self, dir: Vec2) {
+		self.center += dir;
+		self.lines.iter_mut().for_each(|line| {
+			line.point1 += dir;
+			line.point2 += dir;
+		});
 	}
+}
+
+impl Drawable for Polygon {
+	fn size(&self) -> Vec2 { Vec2::ZERO }
+
+	fn pos(&self) -> Vec2 { Vec2::ZERO }
 
 	fn draw(&self) {
-		draw_rectangle(
-			self.pos.x,
-			self.pos.y,
-			self.size.x,
-			self.size.y,
-			Color::from_rgba(255, 0, 0, 100),
-		);
+		self.lines.iter().for_each(|line| {
+			draw_line(
+				line.point1.x,
+				line.point1.y,
+				line.point2.x,
+				line.point2.y,
+				1.0,
+				WHITE,
+			);
+		});
 	}
 }
 
-pub trait AsAABB {
-	fn as_aabb(&self) -> AxisAlignedBoundingBox;
+impl AsPolygon for Polygon {
+	fn as_polygon(&self) -> Polygon { *self }
+}
 
-	fn center(&self) -> Vec2 {
-		let aabb = self.as_aabb();
-		aabb.pos + (aabb.size / 2.0)
-	}
+pub trait AsPolygon {
+	fn as_polygon(&self) -> Polygon;
 
-	fn aabb_pos(&self) -> Vec2 {
-		let aabb = self.as_aabb();
-		aabb.pos
-	}
+	fn center(&self) -> Vec2 { self.as_polygon().center }
+}
 
-	fn within_aabb(&self, pos: Vec2) -> bool {
-		let aabb = self.as_aabb();
-		pos.cmpge(aabb.pos).all() && pos.cmple(aabb.pos + aabb.size).all()
+pub fn easy_polygon(center: Vec2, half_size: Vec2, rotation: f32) -> Polygon {
+	let rotated_half_size_x_cos = half_size.x * rotation.cos();
+	let rotated_half_size_x_sin = half_size.x * rotation.sin();
+
+	let rotated_half_size_y_cos = half_size.y * rotation.cos();
+	let rotated_half_size_y_sin = half_size.y * rotation.sin();
+
+	let corner1 = Vec2::new(
+		center.x - rotated_half_size_x_cos - rotated_half_size_y_sin,
+		center.y - rotated_half_size_x_sin + rotated_half_size_y_cos,
+	);
+
+	let corner2 = Vec2::new(
+		center.x + rotated_half_size_x_cos - rotated_half_size_y_sin,
+		center.y + rotated_half_size_x_sin + rotated_half_size_y_cos,
+	);
+
+	let corner3 = Vec2::new(
+		center.x - rotated_half_size_x_cos + rotated_half_size_y_sin,
+		center.y - rotated_half_size_x_sin - rotated_half_size_y_cos,
+	);
+
+	let corner4 = Vec2::new(
+		center.x + rotated_half_size_x_cos + rotated_half_size_y_sin,
+		center.y + rotated_half_size_x_sin - rotated_half_size_y_cos,
+	);
+
+	let line1 = Line::new(corner1, corner2);
+	let line2 = Line::new(corner3, corner4);
+	let line3 = Line::new(corner2, corner4);
+	let line4 = Line::new(corner1, corner3);
+
+	Polygon {
+		center,
+		lines: [line1, line2, line3, line4],
 	}
 }
 
-pub fn aabb_collision<A: AsAABB, B: AsAABB>(aabb1: &A, aabb2: &B, distance: Vec2) -> bool {
-	let mut obj1 = aabb1.as_aabb();
-	let obj2 = aabb2.as_aabb();
+pub fn point_in_polygon<A: AsPolygon>(polygon: &A, point: Vec2) -> bool {
+	let polygon = polygon.as_polygon();
+	let point_line = Line::new(point, point + Vec2::new(1000.0, 0.0));
 
-	obj1.pos += distance;
+	let num_intersections = polygon
+		.lines
+		.iter()
+		.filter(|line| line.intersect(&point_line))
+		.count();
 
-	let obj1_min = obj1.pos;
-	let obj1_max = obj1.pos + obj1.size;
-
-	let obj2_min = obj2.pos;
-	let obj2_max = obj2.pos + obj2.size;
-
-	obj1_min.cmplt(obj2_max).all() && obj2_min.cmplt(obj1_max).all()
+	// If the number of intersections is odd, then the point is inside the polygon
+	num_intersections & 1 != 0
 }
 
-pub fn aabb_collision_dir<A: AsAABB, B: AsAABB>(aabb1: &A, aabb2: &B, distance: Vec2) -> BVec2 {
-	let obj1 = aabb1.as_aabb();
-	let obj2 = aabb2.as_aabb();
+pub fn aabb_collision<A: AsPolygon, B: AsPolygon>(poly1: &A, poly2: &B, distance: Vec2) -> bool {
+	let mut poly1: Polygon = poly1.as_polygon();
+	poly1.shift(distance);
+	let poly2: Polygon = poly2.as_polygon();
 
-	let obj1_pos_x = obj1.pos + Vec2::new(distance.x, 0.0);
-	let obj1_pos_y = obj1.pos + Vec2::new(0.0, distance.y);
+	poly1
+		.lines
+		.iter()
+		.any(|line1| poly2.lines.iter().any(|line2| line1.intersect(line2)))
+}
 
-	let check_collision = |obj1_pos: Vec2| -> bool {
-		let obj1_min = obj1_pos;
-		let obj1_max = obj1_pos + obj1.size;
+pub fn aabb_collision_dir<A: AsPolygon, B: AsPolygon>(
+	aabb1: &A, aabb2: &B, distance: Vec2,
+) -> BVec2 {
+	let obj1 = aabb1.as_polygon();
+	let obj2 = aabb2.as_polygon();
 
-		let obj2_min = obj2.pos;
-		let obj2_max = obj2.pos + obj2.size;
+	let mut obj1_pos_x = obj1.clone();
+	let mut obj1_pos_y = obj1.clone();
 
-		obj1_min.cmplt(obj2_max).all() && obj2_min.cmplt(obj1_max).all()
-	};
+	obj1_pos_x.shift(Vec2::new(distance.x, 0.0));
+	obj1_pos_y.shift(Vec2::new(0.0, distance.y));
+
+	let check_collision = |obj: Polygon| -> bool { aabb_collision(&obj, &obj2, distance) };
 
 	BVec2::new(check_collision(obj1_pos_x), check_collision(obj1_pos_y))
 }

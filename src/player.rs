@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::fmt::Display;
 
 use crate::attacks::*;
@@ -7,7 +7,7 @@ use crate::enchantments::{Enchantable, Enchantment, EnchantmentKind};
 use crate::items::ItemType::{self, *};
 use crate::items::{attack_with_item, ItemInfo};
 use crate::map::{pos_to_tile, Floor, FloorInfo};
-use crate::math::{aabb_collision, AsAABB, AxisAlignedBoundingBox};
+use crate::math::{aabb_collision, easy_polygon, AsPolygon, Polygon};
 use macroquad::prelude::*;
 
 pub const PLAYER_SIZE: f32 = 12.0;
@@ -261,9 +261,7 @@ impl Player {
 		}
 	}
 
-	pub fn inventory(&self) -> &PlayerInventory {
-		&self.inventory
-	}
+	pub fn inventory(&self) -> &PlayerInventory { &self.inventory }
 
 	pub fn set_selected_item(&mut self, i: Option<ItemSelectedInfo>) {
 		self.inventory.selected_item = i;
@@ -283,24 +281,16 @@ impl Player {
 	}
 
 	#[inline]
-	pub fn pos(&self) -> Vec2 {
-		self.pos
-	}
+	pub fn pos(&self) -> Vec2 { self.pos }
 
 	#[inline]
-	pub fn hp(&self) -> u16 {
-		self.hp.points
-	}
+	pub fn hp(&self) -> u16 { self.hp.points }
 
 	#[inline]
-	pub fn mp(&self) -> u16 {
-		self.mp.points
-	}
+	pub fn mp(&self) -> u16 { self.mp.points }
 
 	#[inline]
-	pub fn spells(&self) -> &[Spell] {
-		&self.spells
-	}
+	pub fn spells(&self) -> &[Spell] { &self.spells }
 
 	#[inline]
 	pub fn enchantments(&self) -> &HashMap<EnchantmentKind, (Enchantment, u16)> {
@@ -310,8 +300,8 @@ impl Player {
 
 pub fn move_player(player: &mut Player, angle: f32, speed: Option<Vec2>, floor_info: &Floor) {
 	let direction: Vec2 = (angle.cos(), angle.sin()).into();
-	let distance = direction
-		* speed.unwrap_or_else(|| {
+	let distance = direction *
+		speed.unwrap_or_else(|| {
 			let speed_mul = match player.enchantments.get(&EnchantmentKind::Sticky) {
 				Some((enchantnment, _)) => 1.0 / enchantnment.strength as f32,
 				None => 1.0,
@@ -322,6 +312,7 @@ pub fn move_player(player: &mut Player, angle: f32, speed: Option<Vec2>, floor_i
 		});
 
 	let collision_info = floor_info.collision_dir(player, distance);
+
 	if !collision_info.x {
 		player.pos.x += distance.x;
 	}
@@ -371,9 +362,9 @@ pub fn update_cooldowns(players: &mut [Player]) {
 
 			player.time_til_change_spell = player.time_til_change_spell.saturating_sub(1);
 
-			if player.changing_spell
-				&& player.time_til_change_spell == 0
-				&& !player.spells.is_empty()
+			if player.changing_spell &&
+				player.time_til_change_spell == 0 &&
+				!player.spells.is_empty()
 			{
 				player.cycle_spells();
 				player.changing_spell = false;
@@ -445,7 +436,7 @@ pub enum DoorInteraction {
 	Toggle,
 }
 
-pub fn interact_with_door<A: AsAABB>(
+pub fn interact_with_door<A: AsPolygon>(
 	entity: &A, players: &[Player], door_interaction: DoorInteraction, floor_info: &mut FloorInfo,
 	textures: &Textures,
 ) {
@@ -464,14 +455,14 @@ pub fn interact_with_door<A: AsAABB>(
 			let entity_in_door = floor_info
 				.monsters
 				.iter()
-				.map(|m| pos_to_tile(&m.as_aabb()))
+				.map(|m| pos_to_tile(&m.as_polygon()))
 				.chain(players.iter().map(|p| pos_to_tile(p)))
 				.any(|pos| pos == door.tile_pos());
 
 			// You can't open or close doors that you're inside of
-			tile_distance.cmple(IVec2::ONE).all()
-				&& !door.tile_pos().eq(&entity_tile_pos)
-				&& !entity_in_door
+			tile_distance.cmple(IVec2::ONE).all() &&
+				!door.tile_pos().eq(&entity_tile_pos) &&
+				!entity_in_door
 		})
 		.reduce(|door_obj, door2_obj| {
 			let door = &door_obj.door().unwrap();
@@ -517,23 +508,17 @@ pub fn interact_with_door<A: AsAABB>(
 	}
 }
 
-impl AsAABB for Player {
-	fn as_aabb(&self) -> AxisAlignedBoundingBox {
-		AxisAlignedBoundingBox {
-			pos: self.pos,
-			size: Vec2::splat(PLAYER_SIZE),
-		}
+impl AsPolygon for Player {
+	fn as_polygon(&self) -> Polygon {
+		const HALF_SIZE: Vec2 = Vec2::splat(PLAYER_SIZE * 0.5);
+		easy_polygon(self.pos + HALF_SIZE, HALF_SIZE, 0.0)
 	}
 }
 
 impl Drawable for Player {
-	fn pos(&self) -> Vec2 {
-		self.pos
-	}
+	fn pos(&self) -> Vec2 { self.pos }
 
-	fn size(&self) -> Vec2 {
-		Vec2::splat(PLAYER_SIZE)
-	}
+	fn size(&self) -> Vec2 { Vec2::splat(PLAYER_SIZE) }
 
 	fn draw(&self) {
 		draw_rectangle(self.pos.x, self.pos.y, PLAYER_SIZE, PLAYER_SIZE, RED);
@@ -602,16 +587,14 @@ pub fn pickup_items(player: &mut Player, floor: &mut Floor) {
 	}
 }
 
-pub fn toggle_inventory(player: &mut Player) {
-	player.in_inventory = !player.in_inventory;
-}
+pub fn toggle_inventory(player: &mut Player) { player.in_inventory = !player.in_inventory; }
 
 pub const ITEM_INVENTORY_SIZE: Vec2 = Vec2::splat(50.0);
 
 pub fn item_pos_from_index(i: usize) -> Vec2 {
-	Vec2::new(100.0, 150.0)
-		+ ITEM_INVENTORY_SIZE
-		+ (UVec2::new(i as u32 % 10, i as u32 / 10) * ITEM_INVENTORY_SIZE.as_uvec2()).as_vec2()
+	Vec2::new(100.0, 150.0) +
+		ITEM_INVENTORY_SIZE +
+		(UVec2::new(i as u32 % 10, i as u32 / 10) * ITEM_INVENTORY_SIZE.as_uvec2()).as_vec2()
 }
 
 pub fn draw_inventory(player: &Player) {
@@ -643,8 +626,8 @@ pub fn draw_inventory(player: &Player) {
 				.inventory
 				.selected_item
 				.as_ref()
-				.map(|info| info.index)
-				== Some(i)
+				.map(|info| info.index) ==
+				Some(i)
 			{
 				true => RED,
 				false => DARKGRAY,

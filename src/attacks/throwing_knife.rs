@@ -1,7 +1,7 @@
 use crate::draw::{Drawable, Textures};
 use crate::items::{ItemInfo, ItemType};
 use crate::map::{pos_to_tile, Floor, FloorInfo};
-use crate::math::{aabb_collision, get_angle, AsAABB, AxisAlignedBoundingBox};
+use crate::math::{aabb_collision, easy_polygon, get_angle, AsPolygon, Polygon};
 use crate::player::{DamageInfo, Player, PLAYER_SIZE};
 use macroquad::prelude::*;
 
@@ -11,8 +11,8 @@ const SIZE: Vec2 = Vec2::new(15.0, 30.0);
 
 pub struct ThrownKnife {
 	pos: Vec2,
-	angle: f32,
-	drawn_angle: f32,
+	movement_angle: f32,
+	rotation_angle: f32,
 	texture: Texture2D,
 	time: u16,
 	player_index: usize,
@@ -20,13 +20,13 @@ pub struct ThrownKnife {
 
 impl Attack for ThrownKnife {
 	fn new(
-		aabb: &dyn AsAABB, index: Option<usize>, angle: f32, textures: &Textures, _floor: &Floor,
-		_is_primary: bool,
+		aabb: &dyn AsPolygon, index: Option<usize>, angle: f32, textures: &Textures,
+		_floor: &Floor, _is_primary: bool,
 	) -> Box<Self> {
 		Box::new(Self {
 			pos: aabb.center() + Vec2::new(angle.cos(), angle.sin()) * SIZE * 0.5,
-			angle,
-			drawn_angle: angle,
+			movement_angle: angle,
+			rotation_angle: angle,
 			texture: *textures.get("throwing_knife.webp").unwrap(),
 			time: 0,
 			player_index: index.unwrap(),
@@ -34,7 +34,7 @@ impl Attack for ThrownKnife {
 	}
 
 	fn side_effects(&self, player: &mut Player, floor: &Floor) {
-		let change = Vec2::new(self.angle.cos(), self.angle.sin()) * PLAYER_SIZE;
+		let change = Vec2::new(self.movement_angle.cos(), self.movement_angle.sin()) * PLAYER_SIZE;
 
 		if !floor.collision(player, change) {
 			player.pos += change;
@@ -42,7 +42,7 @@ impl Attack for ThrownKnife {
 	}
 
 	fn update(&mut self, floor_info: &mut FloorInfo, _players: &mut [Player]) -> bool {
-		let movement = Vec2::new(self.angle.cos(), self.angle.sin()) * 8.0;
+		let movement = Vec2::new(self.movement_angle.cos(), self.movement_angle.sin()) * 8.0;
 		let mut should_drop = false;
 
 		if !floor_info.floor.collision(self, movement) {
@@ -52,15 +52,15 @@ impl Attack for ThrownKnife {
 			should_drop = true;
 		}
 
-		self.drawn_angle += 0.5;
+		self.rotation_angle += 0.5;
 
-		let aabb = self.as_aabb();
+		let poly = self.as_polygon();
 
 		// Check to see if it's collided with a monster
 		if let Some(monster) = floor_info
 			.monsters
 			.iter_mut()
-			.find(|m| aabb_collision(&aabb, &m.as_aabb(), Vec2::ZERO))
+			.find(|m| aabb_collision(&poly, &m.as_polygon(), Vec2::ZERO))
 		{
 			const DAMAGE: u16 = 18;
 
@@ -122,38 +122,26 @@ impl Attack for ThrownKnife {
 		should_drop
 	}
 
-	fn cooldown(&self) -> u16 {
-		10
-	}
+	fn cooldown(&self) -> u16 { 10 }
 
-	fn mana_cost(&self) -> u16 {
-		0
-	}
+	fn mana_cost(&self) -> u16 { 0 }
+
+	fn as_polygon_optional(&self) -> Option<Polygon> { Some(self.as_polygon()) }
 }
 
-impl AsAABB for ThrownKnife {
-	fn as_aabb(&self) -> AxisAlignedBoundingBox {
-		AxisAlignedBoundingBox {
-			pos: self.pos,
-			size: Vec2::splat(SIZE.max_element()),
-		}
+impl AsPolygon for ThrownKnife {
+	fn as_polygon(&self) -> Polygon {
+		let half_size: Vec2 = SIZE * Vec2::splat(0.5);
+		easy_polygon(self.pos + half_size, half_size, self.rotation_angle)
 	}
 }
 
 impl Drawable for ThrownKnife {
-	fn pos(&self) -> Vec2 {
-		self.pos
-	}
+	fn pos(&self) -> Vec2 { self.pos }
 
-	fn size(&self) -> Vec2 {
-		SIZE
-	}
+	fn size(&self) -> Vec2 { SIZE }
 
-	fn rotation(&self) -> f32 {
-		self.drawn_angle
-	}
+	fn rotation(&self) -> f32 { self.rotation_angle }
 
-	fn texture(&self) -> Option<Texture2D> {
-		Some(self.texture)
-	}
+	fn texture(&self) -> Option<Texture2D> { Some(self.texture) }
 }

@@ -4,7 +4,7 @@ use crate::attacks::{Attack, Slimeball};
 use crate::draw::{Drawable, Textures};
 use crate::enchantments::{Enchantable, Enchantment, EnchantmentKind};
 use crate::map::{pos_to_tile, Floor, Object, TILE_SIZE};
-use crate::math::{aabb_collision, get_angle, AsAABB, AxisAlignedBoundingBox};
+use crate::math::{aabb_collision, easy_polygon, get_angle, AsPolygon, Polygon};
 use crate::monsters::Monster;
 use crate::player::{damage_player, DamageInfo, Player};
 
@@ -79,7 +79,7 @@ impl Monster for GreenSlime {
 
 		// Throw a slimeball at all visible players
 		let players_to_attack = players.iter().filter(|player| {
-			let player_tile_pos = pos_to_tile(&player.as_aabb());
+			let player_tile_pos = pos_to_tile(&player.as_polygon());
 			visible_objects
 				.iter()
 				.any(|obj| obj.tile_pos() == player_tile_pos)
@@ -139,11 +139,13 @@ fn step_pathfinding(my_monster: &mut GreenSlime, _players: &[Player], floor: &Fl
 		}
 	} else {
 		if let Some(Target::Pos(pos)) = my_monster.current_target {
-			let aabb = AxisAlignedBoundingBox {
-				pos,
-				size: Vec2::splat(TILE_SIZE as f32),
-			};
-			let path = floor.find_path(my_monster, &aabb, false, true, None);
+			let poly = easy_polygon(
+				pos + Vec2::splat((TILE_SIZE / 2) as f32),
+				Vec2::splat((TILE_SIZE / 2) as f32),
+				0.0,
+			);
+
+			let path = floor.find_path(my_monster, &poly, false, true, None);
 
 			if let Some(path) = path {
 				my_monster.current_path = Some((path, 1));
@@ -270,12 +272,10 @@ impl Enchantable for GreenSlime {
 	}
 }
 
-impl AsAABB for GreenSlime {
-	fn as_aabb(&self) -> AxisAlignedBoundingBox {
-		AxisAlignedBoundingBox {
-			pos: self.pos,
-			size: self.size(),
-		}
+impl AsPolygon for GreenSlime {
+	fn as_polygon(&self) -> Polygon {
+		let half_size = self.size() * Vec2::splat(0.5);
+		easy_polygon(self.pos + half_size, half_size, 0.0)
 	}
 }
 

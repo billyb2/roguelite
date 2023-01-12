@@ -27,7 +27,7 @@ use macroquad::ui::{root_ui, Skin};
 use once_cell::sync::Lazy;
 
 use crate::enchantments::{Enchantable, EnchantmentKind};
-use crate::math::AsAABB;
+use crate::math::AsPolygon;
 
 pub const MAX_VIEW_OF_PLAYER: f32 = 200.0;
 
@@ -101,7 +101,7 @@ async fn main() {
 	class.pop();
 
 	let class = match class.is_empty() {
-		true => PlayerClass::Warrior,
+		true => PlayerClass::Rogue,
 		false => match class.as_str().try_into() {
 			Ok(class) => class,
 			Err(_) => panic!("Invalid class given: {class}"),
@@ -289,7 +289,7 @@ async fn main() {
 			.filter(only_show_past_seen_objects);
 
 		let monsters_to_draw = map.current_floor().monsters.iter().filter(|m| {
-			let monster_tile_pos = pos_to_tile(&m.as_aabb());
+			let monster_tile_pos = pos_to_tile(&m.as_polygon());
 			visible_objects
 				.iter()
 				.flatten()

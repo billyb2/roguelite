@@ -2,12 +2,13 @@ use std::f32::consts::PI;
 
 use crate::draw::{Drawable, Textures};
 use crate::map::{Floor, FloorInfo};
-use crate::math::{aabb_collision, get_angle, AsAABB, AxisAlignedBoundingBox};
+use crate::math::{aabb_collision, easy_polygon, get_angle, AsPolygon};
 use crate::player::{DamageInfo, Player, PLAYER_SIZE};
 use macroquad::prelude::*;
 
 use super::Attack;
 
+const HALF_SIZE: Vec2 = Vec2::new(15.0 * 0.5, 20.0 * 0.5);
 const SIZE: Vec2 = Vec2::new(15.0, 20.0);
 const SWING_TIME: u16 = 10;
 
@@ -22,12 +23,12 @@ pub struct Slash {
 
 impl Attack for Slash {
 	fn new(
-		aabb: &dyn AsAABB, index: Option<usize>, angle: f32, textures: &Textures, _floor: &Floor,
-		_is_primary: bool,
+		aabb: &dyn AsPolygon, index: Option<usize>, angle: f32, textures: &Textures,
+		_floor: &Floor, _is_primary: bool,
 	) -> Box<Self> {
 		let angle = angle + (PI * 0.33);
 		Box::new(Self {
-			pos: aabb.aabb_pos(),
+			pos: aabb.center(),
 			angle,
 			texture: *textures.get("sword.webp").unwrap(),
 			time: 0,
@@ -48,15 +49,15 @@ impl Attack for Slash {
 		self.angle -= 0.2;
 		let movement = Vec2::new(self.angle.cos(), self.angle.sin()) * PLAYER_SIZE * 2.0;
 
-		self.pos = players[self.player_index].aabb_pos() + movement;
+		self.pos = players[self.player_index].center() + movement;
 
-		let aabb = self.as_aabb();
+		let poly = self.as_polygon();
 
 		// Check to see if it's collided with a monster
 		floor_info
 			.monsters
 			.iter_mut()
-			.filter(|m| aabb_collision(&aabb, &m.as_aabb(), Vec2::ZERO))
+			.filter(|m| aabb_collision(&poly, &m.as_polygon(), Vec2::ZERO))
 			.for_each(|monster| {
 				// Damage is low bc of hitting enemies multiple times
 				const DAMAGE: u16 = 4;
@@ -76,42 +77,25 @@ impl Attack for Slash {
 		false
 	}
 
-	fn cooldown(&self) -> u16 {
-		SWING_TIME * 3
-	}
+	fn cooldown(&self) -> u16 { SWING_TIME * 3 }
 
-	fn mana_cost(&self) -> u16 {
-		0
-	}
+	fn mana_cost(&self) -> u16 { 0 }
 }
 
-impl AsAABB for Slash {
-	fn as_aabb(&self) -> AxisAlignedBoundingBox {
-		AxisAlignedBoundingBox {
-			pos: self.pos,
-			size: SIZE,
-		}
+impl AsPolygon for Slash {
+	fn as_polygon(&self) -> crate::math::Polygon {
+		easy_polygon(self.pos + HALF_SIZE, HALF_SIZE, 0.0)
 	}
 }
 
 impl Drawable for Slash {
-	fn pos(&self) -> Vec2 {
-		self.pos
-	}
+	fn pos(&self) -> Vec2 { self.pos }
 
-	fn size(&self) -> Vec2 {
-		SIZE
-	}
+	fn size(&self) -> Vec2 { SIZE }
 
-	fn rotation(&self) -> f32 {
-		self.angle
-	}
+	fn rotation(&self) -> f32 { self.angle }
 
-	fn flip_x(&self) -> bool {
-		false
-	}
+	fn flip_x(&self) -> bool { false }
 
-	fn texture(&self) -> Option<Texture2D> {
-		Some(self.texture)
-	}
+	fn texture(&self) -> Option<Texture2D> { Some(self.texture) }
 }

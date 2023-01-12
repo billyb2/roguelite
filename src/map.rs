@@ -1,4 +1,3 @@
-use std::borrow::Borrow;
 use std::collections::HashMap;
 
 use macroquad::prelude::*;
@@ -12,12 +11,13 @@ use crate::items::{ItemInfo, ItemType, PotionType};
 use crate::math::{
 	aabb_collision,
 	aabb_collision_dir,
+	easy_polygon,
 	points_on_circumference,
 	points_on_line,
-	AsAABB,
-	AxisAlignedBoundingBox,
+	AsPolygon,
+	Polygon,
 };
-use crate::monsters::{GreenSlime, Monster, SmallRat};
+use crate::monsters::{Monster, SmallRat};
 use crate::player::Player;
 
 pub const TILE_SIZE: usize = 25;
@@ -127,15 +127,19 @@ impl Object {
 	}
 }
 
-impl<A: Borrow<Object>> AsAABB for A {
-	fn as_aabb(&self) -> AxisAlignedBoundingBox {
-		let obj = self.borrow();
-
-		AxisAlignedBoundingBox {
-			pos: obj.pos.as_vec2() * Vec2::splat(TILE_SIZE as f32),
-			size: Vec2::splat(TILE_SIZE as f32),
-		}
+impl AsPolygon for Object {
+	fn as_polygon(&self) -> Polygon {
+		const HALF_TILE_SIZE: Vec2 = Vec2::splat(TILE_SIZE as f32 / 2.0);
+		easy_polygon(
+			(self.pos.as_vec2() * Vec2::splat(TILE_SIZE as f32)) + HALF_TILE_SIZE,
+			HALF_TILE_SIZE,
+			0.0,
+		)
 	}
+}
+
+impl AsPolygon for &Object {
+	fn as_polygon(&self) -> Polygon { (*self).as_polygon() }
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -739,17 +743,17 @@ impl Floor {
 	}
 
 	// Same as collision, but returns the actual Object collided w.
-	pub fn collision_obj<A: AsAABB>(&self, aabb: &A, distance: Vec2) -> Option<&Object> {
+	pub fn collision_obj<A: AsPolygon>(&self, aabb: &A, distance: Vec2) -> Option<&Object> {
 		self.objects
 			.iter()
 			.find(|object| object.is_collidable() && aabb_collision(aabb, *object, distance))
 	}
 
-	pub fn collision<A: AsAABB>(&self, aabb: &A, distance: Vec2) -> bool {
+	pub fn collision<A: AsPolygon>(&self, aabb: &A, distance: Vec2) -> bool {
 		self.collision_obj(aabb, distance).is_some()
 	}
 
-	pub fn collision_dir<A: AsAABB>(&self, aabb: &A, distance: Vec2) -> glam::BVec2 {
+	pub fn collision_dir<A: AsPolygon>(&self, aabb: &A, distance: Vec2) -> glam::BVec2 {
 		self.objects
 			.iter()
 			.filter_map(|object| {
@@ -770,6 +774,7 @@ impl Floor {
 				|collision_info, obj_collision_info| collision_info | obj_collision_info,
 			)
 	}
+
 	pub fn doors(&mut self) -> impl Iterator<Item = &mut Object> {
 		self.objects.iter_mut().filter(|obj| obj.door.is_some())
 	}
@@ -784,7 +789,7 @@ impl Floor {
 		})
 	}
 
-	pub fn find_path<S: AsAABB, G: AsAABB>(
+	pub fn find_path<S: AsPolygon, G: AsPolygon>(
 		&self, pos: &S, goal: &G, only_visible: bool, ignore_door_collision: bool,
 		randomness: Option<i32>,
 	) -> Option<Vec<Vec2>> {
@@ -798,7 +803,7 @@ impl Floor {
 		)
 	}
 
-	pub fn visible_objects_mut<'a, A: AsAABB>(
+	pub fn visible_objects_mut<'a, A: AsPolygon>(
 		aabb: &A, size: Option<i32>, objects: &'a mut [Object],
 	) -> Vec<&'a Object> {
 		let center_tile = pos_to_tile(aabb);
@@ -836,7 +841,7 @@ impl Floor {
 			.collect()
 	}
 
-	pub fn visible_objects<A: AsAABB>(&self, aabb: &A, size: Option<i32>) -> Vec<&Object> {
+	pub fn visible_objects<A: AsPolygon>(&self, aabb: &A, size: Option<i32>) -> Vec<&Object> {
 		let center_tile = pos_to_tile(aabb);
 
 		let edges = points_on_circumference(center_tile, size.unwrap_or(12));
@@ -952,12 +957,10 @@ fn find_viable_neighbors(
 		.collect()
 }
 
-pub fn find_path<S: AsAABB, G: AsAABB>(
+pub fn find_path<S: AsPolygon, G: AsPolygon>(
 	start: &S, goal: &G, floor: &Floor, only_visible: bool, ignore_door_collision: bool,
 	randomness: Option<i32>,
 ) -> Option<Vec<Vec2>> {
-	let _aabb = start.as_aabb();
-
 	let start_tile_pos = pos_to_tile(start);
 	let goal_tile_pos = pos_to_tile(goal);
 
@@ -997,7 +1000,7 @@ pub fn distance_squared(pos1: IVec2, pos2: IVec2) -> i32 {
 }
 
 /// Convert from a game world position to a tile position
-pub fn pos_to_tile<A: AsAABB>(obj: &A) -> IVec2 {
+pub fn pos_to_tile<A: AsPolygon>(obj: &A) -> IVec2 {
 	let center = obj.center();
 
 	(center / Vec2::splat(TILE_SIZE as f32)).floor().as_ivec2()

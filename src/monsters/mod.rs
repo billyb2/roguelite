@@ -7,7 +7,7 @@ use crate::attacks::Attack;
 use crate::draw::{Drawable, Textures};
 use crate::enchantments::{Enchantable, Enchantment};
 use crate::map::{Floor, FloorInfo};
-use crate::math::{AsAABB, AxisAlignedBoundingBox};
+use crate::math::AsPolygon;
 use crate::player::{DamageInfo, Player};
 
 use macroquad::prelude::*;
@@ -23,7 +23,7 @@ struct Effect {
 }
 
 // All monsters are required to have a drawable AABB and be drawable
-pub trait Monster: AsAABB + Drawable + Send + Sync + Enchantable {
+pub trait Monster: AsPolygon + Drawable + Send + Sync + Enchantable {
 	fn new(textures: &Textures, pos: Vec2) -> Box<dyn Monster>
 	where
 		Self: Sized;
@@ -40,7 +40,6 @@ pub trait Monster: AsAABB + Drawable + Send + Sync + Enchantable {
 	fn living(&self) -> bool;
 	/// The players to give XP to, and how much XP to give
 	fn xp(&self) -> (&HashSet<usize>, u32);
-	fn as_aabb_obj(&self) -> AxisAlignedBoundingBox { self.as_aabb() }
 }
 
 pub fn update_monsters(

@@ -1,12 +1,13 @@
 use crate::draw::{Drawable, Textures};
 use crate::enchantments::{Enchantment, EnchantmentKind};
 use crate::map::{Floor, FloorInfo};
-use crate::math::{aabb_collision, AsAABB, AxisAlignedBoundingBox};
+use crate::math::{aabb_collision, easy_polygon, AsPolygon, Polygon};
 use crate::player::{Player, PLAYER_SIZE};
 use macroquad::prelude::*;
 
 use super::Attack;
 
+const HALF_SIZE: Vec2 = Vec2::new(45.0, 45.0);
 const SIZE: Vec2 = Vec2::new(90.0, 90.0);
 
 pub struct BlindingLight {
@@ -18,8 +19,8 @@ pub struct BlindingLight {
 
 impl Attack for BlindingLight {
 	fn new(
-		aabb: &dyn AsAABB, _index: Option<usize>, angle: f32, textures: &Textures, _floor: &Floor,
-		_is_primary: bool,
+		aabb: &dyn AsPolygon, _index: Option<usize>, angle: f32, textures: &Textures,
+		_floor: &Floor, _is_primary: bool,
 	) -> Box<Self> {
 		Box::new(Self {
 			pos: aabb.center() + (Vec2::new(angle.cos(), angle.sin()) * PLAYER_SIZE),
@@ -40,7 +41,7 @@ impl Attack for BlindingLight {
 		floor
 			.monsters
 			.iter_mut()
-			.filter(|m| aabb_collision(self, &m.as_aabb(), Vec2::ZERO))
+			.filter(|m| aabb_collision(self, &m.as_polygon(), Vec2::ZERO))
 			.for_each(|monster| {
 				monster.apply_enchantment(Enchantment {
 					kind: EnchantmentKind::Blinded,
@@ -56,15 +57,12 @@ impl Attack for BlindingLight {
 	fn mana_cost(&self) -> u16 { 3 }
 
 	fn side_effects(&self, _player: &mut Player, _floor: &Floor) {}
+
+	fn as_polygon_optional(&self) -> Option<Polygon> { Some(self.as_polygon()) }
 }
 
-impl AsAABB for BlindingLight {
-	fn as_aabb(&self) -> AxisAlignedBoundingBox {
-		AxisAlignedBoundingBox {
-			pos: self.pos,
-			size: SIZE,
-		}
-	}
+impl AsPolygon for BlindingLight {
+	fn as_polygon(&self) -> Polygon { easy_polygon(self.pos + HALF_SIZE, HALF_SIZE, self.angle) }
 }
 
 impl Drawable for BlindingLight {

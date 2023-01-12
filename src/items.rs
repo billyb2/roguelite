@@ -6,8 +6,8 @@ use crate::attacks::{Attack, BlindingLight, MagicMissile, Slash, Stab, ThrownKni
 use crate::draw::{Drawable, Textures};
 use crate::enchantments::{Enchantable, Enchantment, EnchantmentKind};
 use crate::map::{Floor, FloorInfo, TILE_SIZE};
-use crate::math::{AsAABB, AxisAlignedBoundingBox};
-use crate::player::{Player, PlayerInventory, Spell};
+use crate::math::{easy_polygon, AsPolygon, Polygon};
+use crate::player::{Player, Spell};
 use crate::TEXTURES;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
@@ -150,12 +150,10 @@ pub fn attack_with_item(
 	}
 }
 
-impl AsAABB for ItemInfo {
-	fn as_aabb(&self) -> AxisAlignedBoundingBox {
-		AxisAlignedBoundingBox {
-			pos: self.pos(),
-			size: self.size(),
-		}
+impl AsPolygon for ItemInfo {
+	fn as_polygon(&self) -> Polygon {
+		let half_size = self.size() * Vec2::splat(0.5);
+		easy_polygon(self.pos() + half_size, half_size, 0.0)
 	}
 }
 

@@ -1,11 +1,19 @@
 use crate::draw::{Drawable, Textures};
 use crate::map::{Floor, FloorInfo};
-use crate::math::{aabb_collision_dir, get_angle, AsAABB, AxisAlignedBoundingBox};
+use crate::math::{
+	aabb_collision,
+	aabb_collision_dir,
+	easy_polygon,
+	get_angle,
+	AsPolygon,
+	Polygon,
+};
 use crate::player::{DamageInfo, Player};
 use macroquad::prelude::*;
 
 use super::Attack;
 
+const HALF_SIZE: Vec2 = Vec2::new(7.5, 7.5);
 const SIZE: Vec2 = Vec2::new(15.0, 15.0);
 
 pub struct MagicMissile {
@@ -19,8 +27,8 @@ pub struct MagicMissile {
 
 impl Attack for MagicMissile {
 	fn new(
-		aabb: &dyn AsAABB, index: Option<usize>, angle: f32, textures: &Textures, _floor: &Floor,
-		_is_primary: bool,
+		aabb: &dyn AsPolygon, index: Option<usize>, angle: f32, textures: &Textures,
+		_floor: &Floor, _is_primary: bool,
 	) -> Box<Self> {
 		Box::new(Self {
 			pos: aabb.center(),
@@ -64,7 +72,7 @@ impl Attack for MagicMissile {
 
 		// Check to see if it's collided with a monster
 		if let Some((monster, collision_info)) = floor_info.monsters.iter_mut().find_map(|m| {
-			let collision_info = aabb_collision_dir(self, &m.as_aabb(), Vec2::ZERO);
+			let collision_info = aabb_collision_dir(self, &m.as_polygon(), Vec2::ZERO);
 
 			if collision_info.any() {
 				Some((m, collision_info))
@@ -118,15 +126,12 @@ impl Attack for MagicMissile {
 	fn cooldown(&self) -> u16 { 45 }
 
 	fn mana_cost(&self) -> u16 { 1 }
+
+	fn as_polygon_optional(&self) -> Option<Polygon> { Some(self.as_polygon()) }
 }
 
-impl AsAABB for MagicMissile {
-	fn as_aabb(&self) -> AxisAlignedBoundingBox {
-		AxisAlignedBoundingBox {
-			pos: self.pos,
-			size: SIZE,
-		}
-	}
+impl AsPolygon for MagicMissile {
+	fn as_polygon(&self) -> Polygon { easy_polygon(self.pos + HALF_SIZE, HALF_SIZE, self.angle) }
 }
 
 impl Drawable for MagicMissile {
