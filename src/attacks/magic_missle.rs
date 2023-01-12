@@ -1,13 +1,6 @@
-use crate::draw::{Drawable, Textures};
+use crate::draw::{load_my_image, Drawable};
 use crate::map::{Floor, FloorInfo};
-use crate::math::{
-	aabb_collision,
-	aabb_collision_dir,
-	easy_polygon,
-	get_angle,
-	AsPolygon,
-	Polygon,
-};
+use crate::math::{aabb_collision_dir, easy_polygon, get_angle, AsPolygon, Polygon};
 use crate::player::{DamageInfo, Player};
 use macroquad::prelude::*;
 
@@ -27,13 +20,12 @@ pub struct MagicMissile {
 
 impl Attack for MagicMissile {
 	fn new(
-		aabb: &dyn AsPolygon, index: Option<usize>, angle: f32, textures: &Textures,
-		_floor: &Floor, _is_primary: bool,
+		aabb: &dyn AsPolygon, index: Option<usize>, angle: f32, _floor: &Floor, _is_primary: bool,
 	) -> Box<Self> {
 		Box::new(Self {
 			pos: aabb.center(),
 			angle,
-			texture: *textures.get("magic_missile.webp").unwrap(),
+			texture: load_my_image("magic_missile.webp"),
 			time: 0,
 			bounces: 0,
 			player_index: index.unwrap(),

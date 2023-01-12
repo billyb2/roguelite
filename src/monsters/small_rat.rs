@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::draw::{Drawable, Textures};
+use crate::draw::{load_my_image, Drawable};
 use crate::enchantments::{Enchantable, Enchantment, EnchantmentKind};
 use crate::map::{pos_to_tile, Floor, Object, TILE_SIZE};
 use crate::math::{aabb_collision, easy_polygon, get_angle, AsPolygon, Polygon};
@@ -44,11 +44,11 @@ pub struct SmallRat {
 }
 
 impl Monster for SmallRat {
-	fn new(textures: &Textures, pos: Vec2) -> Box<dyn Monster> {
+	fn new(pos: Vec2) -> Box<dyn Monster> {
 		let monster: Box<dyn Monster> = Box::new(Self {
 			pos,
 			health: MAX_HEALTH,
-			texture: *textures.get("small_mouse.webp").unwrap(),
+			texture: load_my_image("small_mouse.webp"),
 			attack_mode: AttackMode::Passive,
 			time_til_move: rand::gen_range(0_u32, 180).try_into().unwrap(),
 			time_spent_moving: 0,

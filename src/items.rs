@@ -3,12 +3,11 @@ use once_cell::sync::Lazy;
 use std::fmt::Display;
 
 use crate::attacks::{Attack, BlindingLight, MagicMissile, Slash, Stab, ThrownKnife};
-use crate::draw::{Drawable, Textures};
+use crate::draw::{load_my_image, Drawable, Textures};
 use crate::enchantments::{Enchantable, Enchantment, EnchantmentKind};
 use crate::map::{Floor, FloorInfo, TILE_SIZE};
 use crate::math::{easy_polygon, AsPolygon, Polygon};
 use crate::player::{Player, Spell};
-use crate::TEXTURES;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum PotionType {
@@ -95,15 +94,14 @@ impl Display for ItemInfo {
 }
 
 pub fn attack_with_item(
-	item: ItemInfo, player: &mut Player, index: Option<usize>, textures: &Textures,
-	floor: &FloorInfo, primary_attack: bool,
+	item: ItemInfo, player: &mut Player, index: Option<usize>, floor: &FloorInfo,
+	primary_attack: bool,
 ) -> Option<Box<dyn Attack>> {
 	match item.item_type {
 		ItemType::ShortSword => Some(Slash::new(
 			player,
 			index,
 			player.angle,
-			textures,
 			&floor.floor,
 			primary_attack,
 		)),
@@ -111,28 +109,17 @@ pub fn attack_with_item(
 			player,
 			index,
 			player.angle,
-			textures,
 			&floor.floor,
 			primary_attack,
 		)),
 		ItemType::WizardGlove => player.spells().get(0).copied().map(|spell| {
 			let attack: Box<dyn Attack> = match spell {
-				Spell::BlindingLight => BlindingLight::new(
-					player,
-					index,
-					player.angle,
-					textures,
-					&floor.floor,
-					primary_attack,
-				),
-				Spell::MagicMissile => MagicMissile::new(
-					player,
-					index,
-					player.angle,
-					textures,
-					&floor.floor,
-					primary_attack,
-				),
+				Spell::BlindingLight => {
+					BlindingLight::new(player, index, player.angle, &floor.floor, primary_attack)
+				},
+				Spell::MagicMissile => {
+					MagicMissile::new(player, index, player.angle, &floor.floor, primary_attack)
+				},
 			};
 
 			attack
@@ -141,7 +128,6 @@ pub fn attack_with_item(
 			player,
 			index,
 			player.angle,
-			textures,
 			&floor.floor,
 			primary_attack,
 		)),
@@ -171,18 +157,14 @@ impl Drawable for ItemInfo {
 	}
 
 	fn texture(&self) -> Option<Texture2D> {
-		Some(
-			*TEXTURES
-				.get(match self.item_type {
-					ItemType::Gold(_) => "gold.webp",
-					ItemType::Potion(potion) => match potion {
-						PotionType::Regeneration => "potion_of_regeneration.webp",
-					},
-					ItemType::ThrowingKnife => "throwing_knife.webp",
-					_ => "gold.webp",
-				})
-				.unwrap(),
-		)
+		Some(load_my_image(match self.item_type {
+			ItemType::Gold(_) => "gold.webp",
+			ItemType::Potion(potion) => match potion {
+				PotionType::Regeneration => "potion_of_regeneration.webp",
+			},
+			ItemType::ThrowingKnife => "throwing_knife.webp",
+			_ => "gold.webp",
+		}))
 	}
 }
 

@@ -1,4 +1,4 @@
-use crate::draw::{Drawable, Textures};
+use crate::draw::{load_my_image, Drawable, Textures};
 use crate::items::{ItemInfo, ItemType};
 use crate::map::{pos_to_tile, Floor, FloorInfo};
 use crate::math::{aabb_collision, easy_polygon, get_angle, AsPolygon, Polygon};
@@ -7,7 +7,7 @@ use macroquad::prelude::*;
 
 use super::Attack;
 
-const SIZE: Vec2 = Vec2::new(15.0, 30.0);
+const SIZE: Vec2 = Vec2::new(10.0, 20.0);
 
 pub struct ThrownKnife {
 	pos: Vec2,
@@ -20,14 +20,13 @@ pub struct ThrownKnife {
 
 impl Attack for ThrownKnife {
 	fn new(
-		aabb: &dyn AsPolygon, index: Option<usize>, angle: f32, textures: &Textures,
-		_floor: &Floor, _is_primary: bool,
+		aabb: &dyn AsPolygon, index: Option<usize>, angle: f32, _floor: &Floor, _is_primary: bool,
 	) -> Box<Self> {
 		Box::new(Self {
-			pos: aabb.center() + Vec2::new(angle.cos(), angle.sin()) * SIZE * 0.5,
+			pos: aabb.center() - SIZE * 0.5,
 			movement_angle: angle,
 			rotation_angle: angle,
-			texture: *textures.get("throwing_knife.webp").unwrap(),
+			texture: load_my_image("throwing_knife.webp"),
 			time: 0,
 			player_index: index.unwrap(),
 		})

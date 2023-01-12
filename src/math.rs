@@ -20,7 +20,10 @@ struct Line {
 }
 
 fn ccw(point1: Vec2, point2: Vec2, point3: Vec2) -> bool {
-	(point3.y - point1.y) * (point2.x - point1.x) > (point2.y - point1.y) * (point3.x - point1.x)
+	let diff2 = point2 - point1;
+	let diff3 = point3 - point1;
+
+	diff3.y * diff2.x > diff2.y * diff3.x
 }
 
 impl Line {

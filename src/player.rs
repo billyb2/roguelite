@@ -138,7 +138,7 @@ pub struct Player {
 }
 
 impl Player {
-	pub fn new(index: usize, class: PlayerClass, pos: Vec2, _textures: &Textures) -> Self {
+	pub fn new(index: usize, class: PlayerClass, pos: Vec2) -> Self {
 		let primary_item = Some(match class {
 			PlayerClass::Warrior => ItemInfo::new(ShortSword, None),
 			PlayerClass::Wizard => ItemInfo::new(WizardGlove, None),
@@ -377,8 +377,8 @@ pub fn update_cooldowns(players: &mut [Player]) {
 }
 
 pub fn player_attack(
-	player: &mut Player, index: Option<usize>, textures: &Textures,
-	attacks: &mut Vec<Box<dyn Attack>>, floor: &FloorInfo, is_primary: bool,
+	player: &mut Player, index: Option<usize>, attacks: &mut Vec<Box<dyn Attack>>,
+	floor: &FloorInfo, is_primary: bool,
 ) {
 	let cooldown = match is_primary {
 		true => &player.primary_cooldown,
@@ -403,9 +403,7 @@ pub fn player_attack(
 			}
 		}
 
-		if let Some(attack) =
-			attack_with_item(item.clone(), player, index, textures, floor, is_primary)
-		{
+		if let Some(attack) = attack_with_item(item.clone(), player, index, floor, is_primary) {
 			let cooldown = match is_primary {
 				true => &mut player.primary_cooldown,
 				false => &mut player.secondary_cooldown,
@@ -438,7 +436,6 @@ pub enum DoorInteraction {
 
 pub fn interact_with_door<A: AsPolygon>(
 	entity: &A, players: &[Player], door_interaction: DoorInteraction, floor_info: &mut FloorInfo,
-	textures: &Textures,
 ) {
 	// First, see if the player is in contact with a door
 	let entity_tile_pos = pos_to_tile(entity);
@@ -498,11 +495,11 @@ pub fn interact_with_door<A: AsPolygon>(
 
 	if let Some(door_obj) = door {
 		match door_interaction {
-			DoorInteraction::Opening => door_obj.open_door(textures),
-			DoorInteraction::Closing => door_obj.close_door(textures),
+			DoorInteraction::Opening => door_obj.open_door(),
+			DoorInteraction::Closing => door_obj.close_door(),
 			DoorInteraction::Toggle => match door_obj.door().unwrap().is_open {
-				true => door_obj.close_door(textures),
-				false => door_obj.open_door(textures),
+				true => door_obj.close_door(),
+				false => door_obj.open_door(),
 			},
 		};
 	}

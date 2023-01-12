@@ -1,4 +1,4 @@
-use crate::draw::{Drawable, Textures};
+use crate::draw::{load_my_image, Drawable, Textures};
 use crate::enchantments::{Enchantable, Enchantment, EnchantmentKind};
 use crate::map::{Floor, FloorInfo};
 use crate::math::{aabb_collision, easy_polygon, get_angle, AsPolygon, Polygon};
@@ -19,13 +19,12 @@ pub struct Slimeball {
 
 impl Attack for Slimeball {
 	fn new(
-		aabb: &dyn AsPolygon, _index: Option<usize>, angle: f32, textures: &Textures,
-		_floor: &Floor, _is_primary: bool,
+		aabb: &dyn AsPolygon, _index: Option<usize>, angle: f32, _floor: &Floor, _is_primary: bool,
 	) -> Box<Self> {
 		Box::new(Self {
 			pos: aabb.center(),
 			angle,
-			texture: *textures.get("slimeball.webp").unwrap(),
+			texture: load_my_image("slimeball.webp"),
 			time: 0,
 		})
 	}

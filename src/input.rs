@@ -17,12 +17,13 @@ use crate::player::{
 	ITEM_INVENTORY_SIZE,
 };
 use crate::NUM_PLAYERS;
+#[cfg(feature = "native")]
 use gilrs::{Axis, Button, Gamepad};
 use macroquad::prelude::*;
 
 pub fn movement_input(
 	player: &mut Player, index: Option<usize>, attacks: &mut Vec<Box<dyn Attack>>,
-	textures: &Textures, floor_info: &mut FloorInfo, camera: &Camera2D,
+	floor_info: &mut FloorInfo, camera: &Camera2D,
 ) {
 	if player.hp() == 0 {
 		return;
@@ -108,11 +109,11 @@ pub fn movement_input(
 	}
 
 	if is_mouse_button_down(MouseButton::Left) {
-		player_attack(player, index, textures, attacks, floor_info, true);
+		player_attack(player, index, attacks, floor_info, true);
 	}
 
 	if is_mouse_button_down(MouseButton::Right) {
-		player_attack(player, index, textures, attacks, floor_info, false);
+		player_attack(player, index, attacks, floor_info, false);
 	}
 
 	if is_key_pressed(KeyCode::P) {
@@ -129,9 +130,10 @@ pub fn movement_input(
 	}
 }
 
+#[cfg(feature = "native")]
 pub fn movement_input_controller(
 	player: &mut Player, index: Option<usize>, attacks: &mut Vec<Box<dyn Attack>>,
-	textures: &Textures, floor_info: &mut FloorInfo, gamepad: &Gamepad,
+	floor_info: &mut FloorInfo, gamepad: &Gamepad,
 ) {
 	let x_movement = gamepad
 		.axis_data(Axis::LeftStickX)
@@ -162,36 +164,34 @@ pub fn movement_input_controller(
 
 	if let Some(button_data) = gamepad.button_data(Button::LeftTrigger2) {
 		if button_data.is_pressed() {
-			player_attack(player, index, textures, attacks, floor_info, false);
+			player_attack(player, index, attacks, floor_info, false);
 		}
 	}
 
 	if let Some(button_data) = gamepad.button_data(Button::RightTrigger2) {
 		if button_data.is_pressed() {
-			player_attack(player, index, textures, attacks, floor_info, true);
+			player_attack(player, index, attacks, floor_info, true);
 		}
 	}
 }
 
-pub fn door_interaction_input(
-	player: &Player, players: &[Player], floor: &mut FloorInfo, textures: &Textures,
-) {
+pub fn door_interaction_input(player: &Player, players: &[Player], floor: &mut FloorInfo) {
 	if is_key_pressed(KeyCode::O) {
-		interact_with_door(player, players, DoorInteraction::Opening, floor, textures);
+		interact_with_door(player, players, DoorInteraction::Opening, floor);
 	}
 
 	if is_key_pressed(KeyCode::C) {
-		interact_with_door(player, players, DoorInteraction::Toggle, floor, textures);
+		interact_with_door(player, players, DoorInteraction::Toggle, floor);
 	}
 }
 
+#[cfg(feature = "native")]
 pub fn door_interaction_input_controller(
-	player: &Player, players: &[Player], floor: &mut FloorInfo, textures: &Textures,
-	gamepad: &Gamepad,
+	player: &Player, players: &[Player], floor: &mut FloorInfo, gamepad: &Gamepad,
 ) {
 	if let Some(button_data) = gamepad.button_data(Button::South) {
 		if button_data.is_pressed() {
-			interact_with_door(player, players, DoorInteraction::Opening, floor, textures);
+			interact_with_door(player, players, DoorInteraction::Opening, floor);
 		}
 	}
 }

@@ -8,12 +8,11 @@ mod math;
 mod monsters;
 mod player;
 
-use std::fs;
 use std::io::{self, Write};
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use attacks::*;
 use draw::*;
+#[cfg(feature = "native")]
 use gilrs::Gilrs;
 use input::*;
 use macroquad::miniquad::{BlendFactor, BlendState, BlendValue, Equation};
@@ -67,30 +66,22 @@ void main() {
 
 const CAMERA_ZOOM: f32 = 0.0045;
 
-pub static TEXTURES: Lazy<Textures> = Lazy::new(|| {
-	fs::read_dir("assets")
-		.unwrap()
-		.filter_map(|file| {
-			if let Ok(file) = file {
-				let file_name = file.file_name().to_str().unwrap().to_string();
-
-				let image_bytes = fs::read(file.path()).unwrap();
-				let texture = Texture2D::from_file_with_format(&image_bytes, None);
-
-				Some((file_name, texture))
-			} else {
-				None
-			}
-		})
-		.collect()
-});
-
 pub const NUM_PLAYERS: usize = 1;
+
+include!(concat!(env!("OUT_DIR"), "/assets.rs"));
 
 #[macroquad::main(window_conf)]
 async fn main() {
-	let time = SystemTime::elapsed(&UNIX_EPOCH).unwrap().as_secs();
-	rand::srand(time);
+	for asset_name in ASSETS {
+		let path = format!("assets/{asset_name}");
+		let texture = load_texture(&path).await.unwrap();
+
+		unsafe {
+			TEXTURES.insert(asset_name.to_string(), texture);
+		}
+	}
+
+	rand::srand(main as u64);
 	print!("What player class are you? Warrior, Wizard, or Rogue?: ");
 	io::stdout().flush().unwrap();
 
@@ -110,11 +101,11 @@ async fn main() {
 
 	let mut attacks = Vec::new();
 
-	let mut map = Map::new(&TEXTURES);
+	let mut map = Map::new();
 
 	let mut players: Vec<_> = (0..NUM_PLAYERS)
 		.into_iter()
-		.map(|i| Player::new(i, class, map.current_floor().current_spawn(), &TEXTURES))
+		.map(|i| Player::new(i, class, map.current_floor().current_spawn()))
 		.collect();
 
 	let mut viewport_screen_height = screen_height() * (1.0 / NUM_PLAYERS as f32);
@@ -138,7 +129,9 @@ async fn main() {
 		})
 		.collect();
 
+	#[cfg(feature = "native")]
 	let mut gilrs = Gilrs::new().unwrap();
+	#[cfg(feature = "native")]
 	let mut active_gamepad = None;
 
 	const SHOW_FRAMERATE: bool = true;
@@ -185,6 +178,7 @@ async fn main() {
 	let mut visible_objects: Vec<Vec<Object>> = Vec::new();
 
 	loop {
+		#[cfg(feature = "native")]
 		while let Some(gilrs::Event {
 			id,
 			event: _,
@@ -207,11 +201,11 @@ async fn main() {
 			&mut players[0],
 			Some(0),
 			&mut attacks,
-			&TEXTURES,
 			map.current_floor_mut(),
 			&cameras[0],
 		);
 
+		#[cfg(feature = "native")]
 		if let Some(gamepad_id) = active_gamepad {
 			let gamepad = gilrs.gamepad(gamepad_id);
 
@@ -219,7 +213,6 @@ async fn main() {
 				&mut players[1],
 				Some(1),
 				&mut attacks,
-				&TEXTURES,
 				map.current_floor_mut(),
 				&gamepad,
 			);
@@ -228,24 +221,18 @@ async fn main() {
 				&players[1],
 				&players,
 				map.current_floor_mut(),
-				&TEXTURES,
 				&gamepad,
 			)
 		}
 
-		door_interaction_input(&players[0], &players, map.current_floor_mut(), &TEXTURES);
+		door_interaction_input(&players[0], &players, map.current_floor_mut());
 
-		trigger_traps(&mut players, map.current_floor_mut(), &TEXTURES);
-		set_effects(&mut players, map.current_floor_mut(), &TEXTURES);
+		trigger_traps(&mut players, map.current_floor_mut());
+		set_effects(&mut players, map.current_floor_mut());
 		update_effects(&mut map.current_floor_mut().floor);
 		update_cooldowns(&mut players);
 		update_attacks(&mut players, map.current_floor_mut(), &mut attacks);
-		update_monsters(
-			&mut players,
-			map.current_floor_mut(),
-			&mut attacks,
-			&TEXTURES,
-		);
+		update_monsters(&mut players, map.current_floor_mut(), &mut attacks);
 
 		if map.current_floor().should_descend(&players) {
 			map.descend(&mut players);

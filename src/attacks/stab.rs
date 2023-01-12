@@ -1,4 +1,4 @@
-use crate::draw::{Drawable, Textures};
+use crate::draw::{load_my_image, Drawable, Textures};
 use crate::map::{Floor, FloorInfo};
 use crate::math::{aabb_collision, easy_polygon, get_angle, AsPolygon, Polygon};
 use crate::player::{DamageInfo, Player, PLAYER_SIZE};
@@ -20,13 +20,12 @@ pub struct Stab {
 
 impl Attack for Stab {
 	fn new(
-		aabb: &dyn AsPolygon, index: Option<usize>, angle: f32, textures: &Textures,
-		_floor: &Floor, _is_primary: bool,
+		aabb: &dyn AsPolygon, index: Option<usize>, angle: f32, _floor: &Floor, _is_primary: bool,
 	) -> Box<Self> {
 		Box::new(Self {
 			pos: aabb.center(),
 			angle,
-			texture: *textures.get("stab.webp").unwrap(),
+			texture: load_my_image("stab.webp"),
 			time: 0,
 			player_index: index.unwrap(),
 			num_piercings: 0,

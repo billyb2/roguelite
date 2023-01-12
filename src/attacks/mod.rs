@@ -23,8 +23,8 @@ use macroquad::prelude::*;
 pub trait Attack: Drawable + Send + Sync {
 	/// Just gives some information about the attack
 	fn new(
-		player: &dyn AsPolygon, player_index: Option<usize>, angle: f32, textures: &Textures,
-		floor: &Floor, is_primary: bool,
+		player: &dyn AsPolygon, player_index: Option<usize>, angle: f32, floor: &Floor,
+		is_primary: bool,
 	) -> Box<Self>
 	where
 		Self: Sized;

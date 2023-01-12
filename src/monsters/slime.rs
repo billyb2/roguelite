@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::attacks::{Attack, Slimeball};
-use crate::draw::{Drawable, Textures};
+use crate::draw::{load_my_image, Drawable, Textures};
 use crate::enchantments::{Enchantable, Enchantment, EnchantmentKind};
 use crate::map::{pos_to_tile, Floor, Object, TILE_SIZE};
 use crate::math::{aabb_collision, easy_polygon, get_angle, AsPolygon, Polygon};
@@ -42,11 +42,11 @@ pub struct GreenSlime {
 }
 
 impl Monster for GreenSlime {
-	fn new(textures: &Textures, pos: Vec2) -> Box<dyn Monster> {
+	fn new(pos: Vec2) -> Box<dyn Monster> {
 		let monster: Box<dyn Monster> = Box::new(Self {
 			pos,
 			health: MAX_HEALTH,
-			texture: *textures.get("green_slime.webp").unwrap(),
+			texture: load_my_image("green_slime.webp"),
 			attack_mode: AttackMode::Passive,
 			current_path: None,
 			current_target: None,
@@ -65,10 +65,7 @@ impl Monster for GreenSlime {
 		};
 	}
 
-	fn attack(
-		&mut self, players: &[Player], floor: &Floor, attacks: &mut Vec<Box<dyn Attack>>,
-		textures: &Textures,
-	) {
+	fn attack(&mut self, players: &[Player], floor: &Floor, attacks: &mut Vec<Box<dyn Attack>>) {
 		self.time_til_attack = self.time_til_attack.saturating_sub(1);
 
 		if self.time_til_attack > 0 {
@@ -87,7 +84,7 @@ impl Monster for GreenSlime {
 
 		players_to_attack.for_each(|player| {
 			let angle = get_angle(player.center(), self.center());
-			let slimeball = Slimeball::new(self, None, angle, textures, &floor, true);
+			let slimeball = Slimeball::new(self, None, angle, &floor, true);
 
 			self.time_til_attack = slimeball.cooldown() as u8;
 			attacks.push(slimeball);

@@ -4,8 +4,10 @@ use macroquad::prelude::*;
 use macroquad::rand;
 use macroquad::rand::*;
 use pathfinding::prelude::*;
+#[cfg(feature = "native")]
+use rayon::prelude::*;
 
-use crate::draw::{Drawable, Textures};
+use crate::draw::{load_my_image, Drawable};
 use crate::enchantments::{Enchantable, Enchantment, EnchantmentKind};
 use crate::items::{ItemInfo, ItemType, PotionType};
 use crate::math::{
@@ -112,16 +114,16 @@ impl Object {
 
 	pub fn items_mut(&mut self) -> &mut Vec<ItemInfo> { &mut self.items }
 
-	pub fn open_door(&mut self, textures: &Textures) {
+	pub fn open_door(&mut self) {
 		if let Some(door) = &mut self.door {
-			self.texture = *textures.get("open_door.webp").unwrap();
+			self.texture = load_my_image("open_door.webp");
 			door.open();
 		}
 	}
 
-	pub fn close_door(&mut self, textures: &Textures) {
+	pub fn close_door(&mut self) {
 		if let Some(door) = &mut self.door {
-			self.texture = *textures.get("door.webp").unwrap();
+			self.texture = load_my_image("door.webp");
 			door.close();
 		}
 	}
@@ -187,18 +189,16 @@ impl Room {
 			.collect()
 	}
 
-	fn generate_wall_objects(&self, textures: &Textures) -> Vec<Object> {
+	fn generate_wall_objects(&self) -> Vec<Object> {
 		self.generate_walls()
 			.into_iter()
 			.map(|w_pos| {
 				let door = self.doors.iter().find(|d| d.pos == w_pos).copied();
 
-				let texture = *textures
-					.get(match door.is_some() {
-						true => "door.webp",
-						false => "black.webp",
-					})
-					.unwrap();
+				let texture = load_my_image(match door.is_some() {
+					true => "door.webp",
+					false => "black.webp",
+				});
 
 				Object {
 					pos: w_pos,
@@ -214,7 +214,7 @@ impl Room {
 			.collect()
 	}
 
-	fn generate_floor(&self, textures: &Textures) -> Vec<Object> {
+	fn generate_floor(&self) -> Vec<Object> {
 		let map_object = |x: i32, y: i32| -> Object {
 			// 1 in 250 chance of being a trapped tile
 			let is_trap: bool = rand::gen_range(1, 250) == 100;
@@ -231,8 +231,8 @@ impl Room {
 			};
 
 			let texture = match is_trap {
-				true => *textures.get("trap.webp").unwrap(),
-				false => *textures.get("light_gray.webp").unwrap(),
+				true => load_my_image("trap.webp"),
+				false => load_my_image("light_gray.webp"),
 			};
 
 			// 1 in every 100 tiles have a 1 in 10 chance of having gold
@@ -279,7 +279,7 @@ impl Room {
 
 pub struct FloorInfo {
 	spawn: Vec2,
-	monster_types: Vec<fn(&Textures, Vec2) -> Box<dyn Monster>>,
+	monster_types: Vec<fn(Vec2) -> Box<dyn Monster>>,
 	item_types: Vec<ItemType>,
 	pub monsters: Vec<Box<dyn Monster>>,
 	pub floor: Floor,
@@ -288,7 +288,7 @@ pub struct FloorInfo {
 }
 
 impl FloorInfo {
-	pub fn new(_floor_num: usize, textures: &Textures) -> Self {
+	pub fn new(_floor_num: usize) -> Self {
 		let mut rooms = Vec::new();
 
 		// First, try to flll the map with as many rooms as possible
@@ -501,7 +501,7 @@ impl FloorInfo {
 				[
 					Object {
 						pos: IVec2::new(x, 0),
-						texture: *textures.get("black.webp").unwrap(),
+						texture: load_my_image("black.webp"),
 						door: None,
 						has_been_seen: false,
 						is_floor: false,
@@ -511,7 +511,7 @@ impl FloorInfo {
 					},
 					Object {
 						pos: IVec2::new(x, MAP_HEIGHT_TILES as i32),
-						texture: *textures.get("black.webp").unwrap(),
+						texture: load_my_image("black.webp"),
 						door: None,
 						has_been_seen: false,
 						is_floor: false,
@@ -527,7 +527,7 @@ impl FloorInfo {
 				[
 					Object {
 						pos: IVec2::new(0, y),
-						texture: *textures.get("black.webp").unwrap(),
+						texture: load_my_image("black.webp"),
 						door: None,
 						has_been_seen: false,
 						is_floor: false,
@@ -538,7 +538,7 @@ impl FloorInfo {
 					},
 					Object {
 						pos: IVec2::new(MAP_WIDTH_TILES as i32, y),
-						texture: *textures.get("black.webp").unwrap(),
+						texture: load_my_image("black.webp"),
 						door: None,
 						has_been_seen: false,
 						is_floor: false,
@@ -554,7 +554,7 @@ impl FloorInfo {
 
 		let room_walls = rooms
 			.iter()
-			.flat_map(|room: &Room| room.generate_wall_objects(textures));
+			.flat_map(|room: &Room| room.generate_wall_objects());
 
 		let rooms_ref = &rooms;
 		let hallways_ref = &hallways;
@@ -570,7 +570,7 @@ impl FloorInfo {
 				if is_dungeon_wall {
 					Some(Object {
 						pos,
-						texture: *textures.get("black.webp").unwrap(),
+						texture: load_my_image("black.webp"),
 						is_floor: false,
 						has_been_seen: false,
 						items: Vec::new(),
@@ -592,7 +592,7 @@ impl FloorInfo {
 			.iter()
 			.map(|&pos| Object {
 				pos,
-				texture: *textures.get("light_gray.webp").unwrap(),
+				texture: load_my_image("light_gray.webp"),
 				door: None,
 				has_been_seen: false,
 				items: Vec::new(),
@@ -600,7 +600,7 @@ impl FloorInfo {
 				is_floor: true,
 				..Default::default()
 			})
-			.chain(rooms.iter().flat_map(|r| r.generate_floor(textures)))
+			.chain(rooms.iter().flat_map(|r| r.generate_floor()))
 			.collect();
 
 		let spawn = rooms
@@ -639,7 +639,7 @@ impl FloorInfo {
 				Some(obj) => obj,
 				None => Object {
 					pos: IVec2::new((i % MAP_WIDTH_TILES) as i32, (i / MAP_HEIGHT_TILES) as i32),
-					texture: *textures.get("black.webp").unwrap(),
+					texture: load_my_image("black.webp"),
 					..Default::default()
 				},
 			})
@@ -658,7 +658,7 @@ impl FloorInfo {
 			rooms,
 			exit: Object {
 				pos: exit_pos,
-				texture: *textures.get("green.webp").unwrap(),
+				texture: load_my_image("green.webp"),
 				door: None,
 				has_been_seen: false,
 				trap: None,
@@ -670,14 +670,14 @@ impl FloorInfo {
 			monsters: Vec::new(),
 		};
 
-		floor_info.spawn_monsters(textures);
+		floor_info.spawn_monsters();
 
 		floor_info
 	}
 
 	pub fn rooms(&self) -> &Vec<Room> { &self.rooms }
 
-	fn spawn_monsters(&mut self, textures: &Textures) {
+	fn spawn_monsters(&mut self) {
 		// Choose every room that doesn't contain the spawn point
 		let spawn_tile = (self.spawn / Vec2::splat(TILE_SIZE as f32))
 			.ceil()
@@ -702,7 +702,7 @@ impl FloorInfo {
 
 			(0..rand::gen_range(0, 6)).into_iter().map(move |_| {
 				let monster_fn = monster_types.choose().unwrap();
-				monster_fn(textures, pos)
+				monster_fn(pos)
 			})
 		}));
 	}
@@ -743,36 +743,52 @@ impl Floor {
 	}
 
 	// Same as collision, but returns the actual Object collided w.
-	pub fn collision_obj<A: AsPolygon>(&self, aabb: &A, distance: Vec2) -> Option<&Object> {
-		self.objects
-			.iter()
-			.find(|object| object.is_collidable() && aabb_collision(aabb, *object, distance))
+	pub fn collision_obj<A: AsPolygon + Sync>(&self, aabb: &A, distance: Vec2) -> Option<&Object> {
+		let check_collidable_obj = |object: &&Object| -> bool {
+			object.is_collidable() && aabb_collision(aabb, *object, distance)
+		};
+
+		#[cfg(feature = "native")]
+		return self.objects.par_iter().find_any(check_collidable_obj);
+
+		#[cfg(not(feature = "native"))]
+		self.objects.iter().find(check_collidable_obj)
 	}
 
-	pub fn collision<A: AsPolygon>(&self, aabb: &A, distance: Vec2) -> bool {
+	pub fn collision<A: AsPolygon + Sync>(&self, aabb: &A, distance: Vec2) -> bool {
 		self.collision_obj(aabb, distance).is_some()
 	}
 
-	pub fn collision_dir<A: AsPolygon>(&self, aabb: &A, distance: Vec2) -> glam::BVec2 {
+	pub fn collision_dir<A: AsPolygon + Sync>(&self, aabb: &A, distance: Vec2) -> glam::BVec2 {
+		let collidable_filter = |object: &Object| -> Option<BVec2> {
+			if object.is_collidable() {
+				let collision_info = aabb_collision_dir(aabb, object, distance);
+
+				match collision_info.any() {
+					true => Some(collision_info),
+					false => None,
+				}
+			} else {
+				None
+			}
+		};
+
+		let collision_reduction = |collision_info: BVec2, obj_collision_info: BVec2| -> BVec2 {
+			collision_info | obj_collision_info
+		};
+
+		#[cfg(feature = "native")]
+		return self
+			.objects
+			.par_iter()
+			.filter_map(collidable_filter)
+			.reduce(|| glam::BVec2::new(false, false), collision_reduction);
+
+		#[cfg(not(feature = "native"))]
 		self.objects
 			.iter()
-			.filter_map(|object| {
-				if object.is_collidable() {
-					let collision_info = aabb_collision_dir(aabb, object, distance);
-
-					if collision_info.any() {
-						Some(collision_info)
-					} else {
-						None
-					}
-				} else {
-					None
-				}
-			})
-			.fold(
-				glam::BVec2::new(false, false),
-				|collision_info, obj_collision_info| collision_info | obj_collision_info,
-			)
+			.filter_map(collidable_filter)
+			.fold(glam::BVec2::new(false, false), collision_reduction)
 	}
 
 	pub fn doors(&mut self) -> impl Iterator<Item = &mut Object> {
@@ -878,10 +894,10 @@ pub struct Map {
 }
 
 impl Map {
-	pub fn new(textures: &Textures) -> Self {
+	pub fn new() -> Self {
 		let floors: Vec<FloorInfo> = (0..5)
 			.into_iter()
-			.map(|floor_num| FloorInfo::new(floor_num, textures))
+			.map(|floor_num| FloorInfo::new(floor_num))
 			.collect();
 
 		Self {
@@ -1006,7 +1022,7 @@ pub fn pos_to_tile<A: AsPolygon>(obj: &A) -> IVec2 {
 	(center / Vec2::splat(TILE_SIZE as f32)).floor().as_ivec2()
 }
 
-pub fn trigger_traps(players: &mut [Player], floor_info: &mut FloorInfo, textures: &Textures) {
+pub fn trigger_traps(players: &mut [Player], floor_info: &mut FloorInfo) {
 	let trapped_objs = floor_info.floor.untriggered_traps();
 
 	trapped_objs.for_each(|trapped_obj| {
@@ -1050,7 +1066,7 @@ pub fn trigger_traps(players: &mut [Player], floor_info: &mut FloorInfo, texture
 
 							let pos = (tile_pos * IVec2::splat(TILE_SIZE as i32)).as_vec2();
 
-							floor_info.monster_types.choose().unwrap()(textures, pos)
+							floor_info.monster_types.choose().unwrap()(pos)
 						}))
 					},
 				};
@@ -1064,7 +1080,7 @@ fn apply_effect<E: Enchantable + ?Sized>(e: &mut E, effect: EffectType) {
 	e.apply_enchantment(enchantment);
 }
 
-pub fn set_effects(players: &mut [Player], floor_info: &mut FloorInfo, _textures: &Textures) {
+pub fn set_effects(players: &mut [Player], floor_info: &mut FloorInfo) {
 	floor_info.floor.objects.iter().for_each(|obj| {
 		obj.effects.keys().copied().for_each(|effect_type| {
 			players

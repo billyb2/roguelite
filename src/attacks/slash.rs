@@ -1,6 +1,6 @@
 use std::f32::consts::PI;
 
-use crate::draw::{Drawable, Textures};
+use crate::draw::{load_my_image, Drawable, Textures};
 use crate::map::{Floor, FloorInfo};
 use crate::math::{aabb_collision, easy_polygon, get_angle, AsPolygon};
 use crate::player::{DamageInfo, Player, PLAYER_SIZE};
@@ -23,14 +23,13 @@ pub struct Slash {
 
 impl Attack for Slash {
 	fn new(
-		aabb: &dyn AsPolygon, index: Option<usize>, angle: f32, textures: &Textures,
-		_floor: &Floor, _is_primary: bool,
+		aabb: &dyn AsPolygon, index: Option<usize>, angle: f32, _floor: &Floor, _is_primary: bool,
 	) -> Box<Self> {
 		let angle = angle + (PI * 0.33);
 		Box::new(Self {
 			pos: aabb.center(),
 			angle,
-			texture: *textures.get("sword.webp").unwrap(),
+			texture: load_my_image("sword.webp"),
 			time: 0,
 			player_index: index.unwrap(),
 			num_piercings: 0,
