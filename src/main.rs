@@ -23,7 +23,6 @@ use player::*;
 use macroquad::miniquad::conf::Platform;
 use macroquad::prelude::*;
 use macroquad::ui::{root_ui, Skin};
-use once_cell::sync::Lazy;
 
 use crate::enchantments::{Enchantable, EnchantmentKind};
 use crate::math::AsPolygon;
@@ -92,7 +91,7 @@ async fn main() {
 	class.pop();
 
 	let class = match class.is_empty() {
-		true => PlayerClass::Rogue,
+		true => PlayerClass::Wizard,
 		false => match class.as_str().try_into() {
 			Ok(class) => class,
 			Err(_) => panic!("Invalid class given: {class}"),

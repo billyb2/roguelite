@@ -116,7 +116,7 @@ pub fn movement_input(
 		player_attack(player, index, attacks, floor_info, false);
 	}
 
-	if is_key_pressed(KeyCode::P) {
+	if is_key_down(KeyCode::LeftShift) {
 		pickup_items(player, &mut floor_info.floor);
 	}
 
