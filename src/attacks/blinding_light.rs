@@ -1,4 +1,4 @@
-use crate::draw::{load_my_image, Drawable, Textures};
+use crate::draw::{load_my_image, Drawable};
 use crate::enchantments::{Enchantment, EnchantmentKind};
 use crate::map::{Floor, FloorInfo};
 use crate::math::{aabb_collision, easy_polygon, AsPolygon, Polygon};

@@ -1,6 +1,6 @@
 use std::f32::consts::PI;
 
-use crate::draw::{load_my_image, Drawable, Textures};
+use crate::draw::{load_my_image, Drawable};
 use crate::map::{Floor, FloorInfo};
 use crate::math::{aabb_collision, easy_polygon, get_angle, AsPolygon};
 use crate::player::{DamageInfo, Player, PLAYER_SIZE};

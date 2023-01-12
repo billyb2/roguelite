@@ -1,4 +1,4 @@
-use crate::draw::{load_my_image, Drawable, Textures};
+use crate::draw::{load_my_image, Drawable};
 use crate::items::{ItemInfo, ItemType};
 use crate::map::{pos_to_tile, Floor, FloorInfo};
 use crate::math::{aabb_collision, easy_polygon, get_angle, AsPolygon, Polygon};

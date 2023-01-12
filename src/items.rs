@@ -3,7 +3,7 @@ use once_cell::sync::Lazy;
 use std::fmt::Display;
 
 use crate::attacks::{Attack, BlindingLight, MagicMissile, Slash, Stab, ThrownKnife};
-use crate::draw::{load_my_image, Drawable, Textures};
+use crate::draw::{load_my_image, Drawable};
 use crate::enchantments::{Enchantable, Enchantment, EnchantmentKind};
 use crate::map::{Floor, FloorInfo, TILE_SIZE};
 use crate::math::{easy_polygon, AsPolygon, Polygon};

@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::fmt::Display;
 
 use crate::attacks::*;
-use crate::draw::{Drawable, Textures};
+use crate::draw::{Drawable};
 use crate::enchantments::{Enchantable, Enchantment, EnchantmentKind};
 use crate::items::ItemType::{self, *};
 use crate::items::{attack_with_item, ItemInfo};

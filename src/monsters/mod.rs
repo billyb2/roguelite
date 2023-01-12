@@ -4,7 +4,7 @@ mod small_rat;
 use std::collections::HashSet;
 
 use crate::attacks::Attack;
-use crate::draw::{Drawable, Textures};
+use crate::draw::{Drawable};
 use crate::enchantments::{Enchantable, Enchantment};
 use crate::map::{Floor, FloorInfo};
 use crate::math::AsPolygon;

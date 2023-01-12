@@ -5,7 +5,7 @@ mod slimeball;
 mod stab;
 mod throwing_knife;
 
-use crate::draw::{Drawable, Textures};
+use crate::draw::{Drawable};
 use crate::map::{Floor, FloorInfo};
 
 use crate::math::{AsPolygon, Polygon};
