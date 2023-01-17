@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::fmt::Display;
 
 use crate::attacks::*;
-use crate::draw::{Drawable};
+use crate::draw::Drawable;
 use crate::enchantments::{Enchantable, Enchantment, EnchantmentKind};
 use crate::items::ItemType::{self, *};
 use crate::items::{attack_with_item, ItemInfo};
@@ -12,11 +12,25 @@ use macroquad::prelude::*;
 
 pub const PLAYER_SIZE: f32 = 12.0;
 
-#[derive(Copy, Clone)]
+pub struct PlayerConfigInfo {
+	pub class: PlayerClass,
+}
+
+#[derive(Copy, Clone, PartialEq)]
 pub enum PlayerClass {
 	Warrior,
 	Wizard,
 	Rogue,
+}
+
+impl Display for PlayerClass {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.write_str(match self {
+			PlayerClass::Warrior => "Warrior",
+			PlayerClass::Wizard => "Wizard",
+			PlayerClass::Rogue => "Rogue",
+		})
+	}
 }
 
 pub struct PlayerClassError;

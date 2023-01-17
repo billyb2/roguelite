@@ -72,9 +72,9 @@ impl Attack for MagicMissile {
 				None
 			}
 		}) {
-			const BASE_DAMAGE: u16 = 2;
+			const BASE_DAMAGE: u16 = 1;
 			// The damage increases the more the projectile bounces
-			let damage = BASE_DAMAGE.pow((0 + self.bounces).into());
+			let damage = BASE_DAMAGE.pow((1 + self.bounces).into());
 
 			let direction = get_angle(monster.pos(), self.pos);
 

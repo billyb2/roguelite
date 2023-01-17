@@ -43,12 +43,8 @@ impl Attack for Stab {
 	fn update(&mut self, floor_info: &mut FloorInfo, _players: &mut [Player]) -> bool {
 		let movement = Vec2::new(self.angle.cos(), self.angle.sin()) * 6.0;
 
-		if !floor_info.floor.collision(self, movement) {
-			self.pos += movement;
-			self.time += 1;
-		} else {
-			return true;
-		}
+		self.pos += movement;
+		self.time += 1;
 
 		if self.time >= 6 {
 			return true;
