@@ -1,20 +1,21 @@
 use macroquad::prelude::*;
 use once_cell::sync::Lazy;
+use serde::Serialize;
 use std::fmt::Display;
 
-use crate::attacks::{Attack, BlindingLight, MagicMissile, Slash, Stab, ThrownKnife};
+use crate::attacks::{Attack, AttackObj, BlindingLight, MagicMissile, Slash, Stab, ThrownKnife};
 use crate::draw::{load_my_image, Drawable};
 use crate::enchantments::{Enchantable, Enchantment, EnchantmentKind};
 use crate::map::{Floor, FloorInfo, TILE_SIZE};
 use crate::math::{easy_polygon, AsPolygon, Polygon};
 use crate::player::{Player, Spell};
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize)]
 pub enum PotionType {
 	Regeneration,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize)]
 pub enum ItemType {
 	ShortSword,
 	WizardsDagger,
@@ -29,7 +30,7 @@ pub enum ItemPos {
 	InventoryPos(u8),
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize)]
 pub struct ItemInfo {
 	cursed: bool,
 	pub item_type: ItemType,
@@ -96,41 +97,45 @@ impl Display for ItemInfo {
 pub fn attack_with_item(
 	item: ItemInfo, player: &mut Player, index: Option<usize>, floor: &FloorInfo,
 	primary_attack: bool,
-) -> Option<Box<dyn Attack>> {
+) -> Option<AttackObj> {
 	match item.item_type {
-		ItemType::ShortSword => Some(Slash::new(
+		ItemType::ShortSword => Some(AttackObj::Slash(Slash::new(
 			player,
 			index,
 			player.angle,
 			&floor.floor,
 			primary_attack,
-		)),
-		ItemType::WizardsDagger => Some(Stab::new(
+		))),
+		ItemType::WizardsDagger => Some(AttackObj::Stab(Stab::new(
 			player,
 			index,
 			player.angle,
 			&floor.floor,
 			primary_attack,
-		)),
-		ItemType::WizardGlove => player.spells().get(0).copied().map(|spell| {
-			let attack: Box<dyn Attack> = match spell {
-				Spell::BlindingLight => {
-					BlindingLight::new(player, index, player.angle, &floor.floor, primary_attack)
-				},
-				Spell::MagicMissile => {
-					MagicMissile::new(player, index, player.angle, &floor.floor, primary_attack)
-				},
-			};
-
-			attack
+		))),
+		ItemType::WizardGlove => player.spells().get(0).copied().map(|spell| match spell {
+			Spell::BlindingLight => AttackObj::BlindingLight(BlindingLight::new(
+				player,
+				index,
+				player.angle,
+				&floor.floor,
+				primary_attack,
+			)),
+			Spell::MagicMissile => AttackObj::MagicMissile(MagicMissile::new(
+				player,
+				index,
+				player.angle,
+				&floor.floor,
+				primary_attack,
+			)),
 		}),
-		ItemType::ThrowingKnife => Some(ThrownKnife::new(
+		ItemType::ThrowingKnife => Some(AttackObj::ThrowingKnife(ThrownKnife::new(
 			player,
 			index,
 			player.angle,
 			&floor.floor,
 			primary_attack,
-		)),
+		))),
 		ItemType::Potion(_) => None,
 		ItemType::Gold(_) => None,
 	}

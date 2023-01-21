@@ -4,29 +4,29 @@ use crate::map::{Floor, FloorInfo};
 use crate::math::{aabb_collision, easy_polygon, get_angle, AsPolygon, Polygon};
 use crate::player::{damage_player, Player};
 use macroquad::prelude::*;
+use serde::Serialize;
 
 use super::Attack;
 
 const HALF_SIZE: Vec2 = Vec2::new(7.5, 2.5);
 const SIZE: Vec2 = Vec2::new(15.0, 5.0);
 
+#[derive(Clone, Serialize)]
 pub struct Slimeball {
 	pos: Vec2,
 	angle: f32,
-	texture: Texture2D,
 	time: u16,
 }
 
 impl Attack for Slimeball {
 	fn new(
 		aabb: &dyn AsPolygon, _index: Option<usize>, angle: f32, _floor: &Floor, _is_primary: bool,
-	) -> Box<Self> {
-		Box::new(Self {
+	) -> Self {
+		Self {
 			pos: aabb.center(),
 			angle,
-			texture: load_my_image("slimeball.webp"),
 			time: 0,
-		})
+		}
 	}
 
 	fn side_effects(&self, _player: &mut Player, _floor_info: &Floor) {}
@@ -84,5 +84,5 @@ impl Drawable for Slimeball {
 
 	fn rotation(&self) -> f32 { self.angle }
 
-	fn texture(&self) -> Option<Texture2D> { Some(self.texture) }
+	fn texture(&self) -> Option<Texture2D> { Some(load_my_image("slimeball.webp")) }
 }

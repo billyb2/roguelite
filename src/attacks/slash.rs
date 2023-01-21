@@ -5,6 +5,7 @@ use crate::map::{Floor, FloorInfo};
 use crate::math::{aabb_collision, easy_polygon, get_angle, AsPolygon};
 use crate::player::{DamageInfo, Player, PLAYER_SIZE};
 use macroquad::prelude::*;
+use serde::Serialize;
 
 use super::Attack;
 
@@ -12,10 +13,10 @@ const HALF_SIZE: Vec2 = Vec2::new(15.0 * 0.5, 20.0 * 0.5);
 const SIZE: Vec2 = Vec2::new(15.0, 20.0);
 const SWING_TIME: u16 = 10;
 
+#[derive(Clone, Serialize)]
 pub struct Slash {
 	pos: Vec2,
 	angle: f32,
-	texture: Texture2D,
 	time: u16,
 	player_index: usize,
 	num_piercings: u8,
@@ -24,16 +25,15 @@ pub struct Slash {
 impl Attack for Slash {
 	fn new(
 		aabb: &dyn AsPolygon, index: Option<usize>, angle: f32, _floor: &Floor, _is_primary: bool,
-	) -> Box<Self> {
+	) -> Self {
 		let angle = angle + (PI * 0.33);
-		Box::new(Self {
+		Self {
 			pos: aabb.center(),
 			angle,
-			texture: load_my_image("sword.webp"),
 			time: 0,
 			player_index: index.unwrap(),
 			num_piercings: 0,
-		})
+		}
 	}
 
 	fn side_effects(&self, _player: &mut Player, _floor: &Floor) {}
@@ -96,5 +96,5 @@ impl Drawable for Slash {
 
 	fn flip_x(&self) -> bool { false }
 
-	fn texture(&self) -> Option<Texture2D> { Some(self.texture) }
+	fn texture(&self) -> Option<Texture2D> { Some(load_my_image("sword.webp")) }
 }

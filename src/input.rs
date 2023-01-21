@@ -1,32 +1,64 @@
-use crate::attacks::Attack;
+use crate::attacks::{Attack, AttackObj};
 
-use crate::items::use_item;
 use crate::map::FloorInfo;
-use crate::math::{easy_polygon, get_angle, point_in_polygon, AsPolygon};
-use crate::player::{
-	interact_with_door,
-	item_pos_from_index,
-	move_player,
-	pickup_items,
-	player_attack,
-	toggle_inventory,
-	DoorInteraction,
-	ItemSelectedInfo,
-	Player,
-	SelectionType,
-	ITEM_INVENTORY_SIZE,
-};
-use crate::NUM_PLAYERS;
+use crate::math::{get_angle, AsPolygon};
+use crate::player::{move_player, player_attack, Player};
+use bytemuck::{Pod, Zeroable};
 #[cfg(feature = "native")]
 use gilrs::{Axis, Button, Gamepad};
 use macroquad::prelude::*;
 
-pub fn movement_input(
-	player: &mut Player, index: Option<usize>, attacks: &mut Vec<Box<dyn Attack>>,
-	floor_info: &mut FloorInfo, camera: &Camera2D,
-) {
+type FlagSize = u32;
+
+const PRIMARY_ATTACK: FlagSize = 0b1;
+const SECONDARY_ATTACK: FlagSize = 0b10;
+const MOVING: FlagSize = 0b100;
+const OPENING_DOOR: FlagSize = 0b1000;
+const CLOSING_DOOR: FlagSize = 0b10000;
+
+#[repr(C)]
+#[derive(Copy, Clone, PartialEq, Pod, Zeroable)]
+pub struct PlayerInput {
+	movement_angle: f32,
+	rotation: f32,
+	flags: FlagSize,
+}
+
+impl PlayerInput {
+	pub fn movement_angle(&self) -> f32 { self.movement_angle }
+
+	pub fn rotation(&self) -> f32 { self.rotation }
+
+	fn set_primary_attacking(&mut self) { self.flags |= PRIMARY_ATTACK; }
+
+	fn set_secondary_attacking(&mut self) { self.flags |= SECONDARY_ATTACK; }
+
+	fn set_moving(&mut self) { self.flags |= MOVING; }
+
+	fn set_opening_door(&mut self) { self.flags |= OPENING_DOOR }
+
+	fn set_closing_door(&mut self) { self.flags |= CLOSING_DOOR }
+
+	pub fn using_primary(&self) -> bool { self.flags & PRIMARY_ATTACK == PRIMARY_ATTACK }
+
+	pub fn using_secondary(&self) -> bool { self.flags & SECONDARY_ATTACK == SECONDARY_ATTACK }
+
+	pub fn is_moving(&self) -> bool { self.flags & MOVING == MOVING }
+
+	pub fn opening_door(&self) -> bool { self.flags & OPENING_DOOR == OPENING_DOOR }
+
+	pub fn closing_door(&self) -> bool { self.flags & CLOSING_DOOR == CLOSING_DOOR }
+}
+
+impl Default for PlayerInput {
+	fn default() -> Self { Self::zeroed() }
+}
+
+pub fn movement_input(player: &Player, _index: Option<usize>, camera: &Camera2D) -> PlayerInput {
+	let mut input = PlayerInput::default();
+
 	if player.hp() == 0 {
-		return;
+		return input;
 	}
 
 	let mut x_movement: f32 = 0.0;
@@ -48,26 +80,20 @@ pub fn movement_input(
 		x_movement += 1.0;
 	}
 
+	/*
 	if is_key_down(KeyCode::Z) {
 		player.changing_spell = true;
 		player.time_til_change_spell = 15;
 	}
+	*/
 
 	let mouse_pos: Vec2 = mouse_position().into();
 
-	player.angle = get_angle(
-		mouse_pos,
-		match NUM_PLAYERS == 1 {
-			true => camera.world_to_screen(player.center()),
-			false => {
-				camera.world_to_screen(player.center()) +
-					Vec2::new(
-						0.0,
-						(camera.viewport.unwrap().3 as f32) * (1.0 / NUM_PLAYERS as f32),
-					)
-			},
-		},
-	);
+	let rotation = get_angle(mouse_pos, camera.world_to_screen(player.center()));
+
+	input.rotation = rotation;
+
+	/*
 
 	if player.get_item_selection_type() != Some(&SelectionType::Selected) {
 		let mut possible_selected_item = (0..player.inventory().items.len()).find_map(|i| {
@@ -107,15 +133,25 @@ pub fn movement_input(
 
 		player.set_selected_item(possible_selected_item);
 	}
+	*/
 
 	if is_mouse_button_down(MouseButton::Left) {
-		player_attack(player, index, attacks, floor_info, true);
+		input.set_primary_attacking();
 	}
 
 	if is_mouse_button_down(MouseButton::Right) {
-		player_attack(player, index, attacks, floor_info, false);
+		input.set_secondary_attacking();
 	}
 
+	if is_key_pressed(KeyCode::O) {
+		input.set_opening_door();
+	}
+
+	if is_key_pressed(KeyCode::C) {
+		input.set_closing_door();
+	}
+
+	/*
 	if is_key_down(KeyCode::LeftShift) {
 		pickup_items(player, &mut floor_info.floor);
 	}
@@ -123,16 +159,19 @@ pub fn movement_input(
 	if is_key_pressed(KeyCode::I) {
 		toggle_inventory(player);
 	}
+	*/
 
 	if x_movement != 0.0 || y_movement != 0.0 {
-		let angle = y_movement.atan2(x_movement);
-		move_player(player, angle, None, &floor_info.floor);
+		input.movement_angle = get_angle(Vec2::new(x_movement, y_movement), Vec2::ZERO);
+		input.set_moving();
 	}
+
+	input
 }
 
 #[cfg(feature = "native")]
 pub fn movement_input_controller(
-	player: &mut Player, index: Option<usize>, attacks: &mut Vec<Box<dyn Attack>>,
+	player: &mut Player, index: Option<usize>, attacks: &mut Vec<AttackObj>,
 	floor_info: &mut FloorInfo, gamepad: &Gamepad,
 ) {
 	let x_movement = gamepad
@@ -171,27 +210,6 @@ pub fn movement_input_controller(
 	if let Some(button_data) = gamepad.button_data(Button::RightTrigger2) {
 		if button_data.is_pressed() {
 			player_attack(player, index, attacks, floor_info, true);
-		}
-	}
-}
-
-pub fn door_interaction_input(player: &Player, players: &[Player], floor: &mut FloorInfo) {
-	if is_key_pressed(KeyCode::O) {
-		interact_with_door(player, players, DoorInteraction::Opening, floor);
-	}
-
-	if is_key_pressed(KeyCode::C) {
-		interact_with_door(player, players, DoorInteraction::Toggle, floor);
-	}
-}
-
-#[cfg(feature = "native")]
-pub fn door_interaction_input_controller(
-	player: &Player, players: &[Player], floor: &mut FloorInfo, gamepad: &Gamepad,
-) {
-	if let Some(button_data) = gamepad.button_data(Button::South) {
-		if button_data.is_pressed() {
-			interact_with_door(player, players, DoorInteraction::Opening, floor);
 		}
 	}
 }

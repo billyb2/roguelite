@@ -9,16 +9,17 @@ use crate::player::{damage_player, DamageInfo, Player};
 
 use macroquad::prelude::*;
 use macroquad::rand::ChooseRandom;
+use serde::Serialize;
 
 use super::Effect;
 
-#[derive(PartialEq)]
+#[derive(Clone, PartialEq, Serialize)]
 enum AttackMode {
 	Passive,
 	Attacking,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Serialize)]
 enum Target {
 	Pos(Vec2),
 	PlayerIndex(usize),
@@ -27,11 +28,11 @@ enum Target {
 const SIZE: f32 = 18.0;
 const MAX_HEALTH: u16 = 22;
 
+#[derive(Clone, Serialize)]
 pub struct SmallRat {
 	health: u16,
 	pos: Vec2,
 	speed_mul: f32,
-	texture: Texture2D,
 	attack_mode: AttackMode,
 	time_spent_moving: u16,
 	time_til_move: u16,
@@ -44,11 +45,10 @@ pub struct SmallRat {
 }
 
 impl Monster for SmallRat {
-	fn new(pos: Vec2) -> Box<dyn Monster> {
-		let monster: Box<dyn Monster> = Box::new(Self {
+	fn new(pos: Vec2) -> Self {
+		Self {
 			pos,
 			health: MAX_HEALTH,
-			texture: load_my_image("small_mouse.webp"),
 			attack_mode: AttackMode::Passive,
 			time_til_move: rand::gen_range(0_u32, 180).try_into().unwrap(),
 			time_spent_moving: 0,
@@ -57,9 +57,7 @@ impl Monster for SmallRat {
 			enchantments: HashMap::new(),
 			damaged_by: HashSet::new(),
 			speed_mul: 1.0,
-		});
-
-		monster
+		}
 	}
 
 	fn movement(&mut self, players: &[Player], floor: &Floor) {
@@ -407,5 +405,5 @@ impl Drawable for SmallRat {
 
 	fn flip_x(&self) -> bool { true }
 
-	fn texture(&self) -> Option<Texture2D> { Some(self.texture) }
+	fn texture(&self) -> Option<Texture2D> { Some(load_my_image("small_rat.webp")) }
 }

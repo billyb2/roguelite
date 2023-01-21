@@ -225,3 +225,14 @@ pub fn points_on_line(pos1: IVec2, pos2: IVec2) -> Vec<IVec2> {
 
 	lines
 }
+
+pub fn fletcher16(data: Vec<u8>) -> u16 {
+	let (sum1, sum2) = data.into_iter().fold((0, 0), |(sum1, sum2), byte| {
+		let sum1 = (sum1 + byte as u16) % 255;
+		let sum2 = (sum2 + sum1) % 255;
+
+		(sum1, sum2)
+	});
+
+	(sum2 << 8) | sum1
+}

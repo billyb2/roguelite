@@ -5,6 +5,7 @@ edition = "2021"
 
 [profile.dev]
 opt-level = 1
+panic = "abort"
 
 [profile.dev.package."*"]
 opt-level = 3
@@ -23,8 +24,12 @@ image = { version = "*", default-features = false, features = ["webp"] }
 pathfinding = { version = "3", default-features = false }
 egui-macroquad = "0.12"
 egui = { version = "0.19" }
+ggrs = { version = "0.9" }
+bytemuck = { version = "1" }
+bincode = "1"
+serde = "1"
+glam = { version = "0.21", features = ["serde"]}
 
 [features]
 default = ["native"]
-
 native = ["rayon", "gilrs"]

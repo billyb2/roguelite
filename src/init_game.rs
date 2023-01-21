@@ -1,12 +1,20 @@
+use std::time::{Duration, Instant};
+
+#[cfg(feature = "native")]
 use gilrs::Gilrs;
 use macroquad::miniquad::{BlendFactor, BlendState, BlendValue, Equation};
 use macroquad::prelude::*;
 use macroquad::ui::{root_ui, Skin};
 
-use crate::attacks::Attack;
-use crate::map::{Map, Object};
+use serde::Serialize;
+
+use crate::attacks::{Attack, AttackObj};
+use crate::config::ConfigInfo;
+
+use crate::map::Map;
 use crate::math::AsPolygon;
-use crate::player::{Player, PlayerClass, PlayerConfigInfo};
+
+use crate::player::{Player, PlayerClass};
 use crate::{CAMERA_ZOOM, DEFAULT_FRAGMENT_SHADER, DEFAULT_VERTEX_SHADER, NUM_PLAYERS};
 
 #[cfg(feature = "native")]
@@ -15,25 +23,37 @@ pub struct GamepadInfo {
 	pub active_gamepad: Option<gilrs::GamepadId>,
 }
 
-pub struct GameInfo {
+#[derive(Clone, Serialize)]
+pub struct GameState {
+	pub frame: u64,
 	pub players: Vec<Player>,
-	pub attacks: Vec<Box<dyn Attack>>,
+	pub attacks: Vec<AttackObj>,
 	pub map: Map,
+}
+
+pub struct GameInfo {
+	pub accumulator: Duration,
+	pub last_update: Instant,
+
+	pub frames_to_skip: u32,
+
+	pub game_state: GameState,
 	pub cameras: Vec<Camera2D>,
+
 	#[cfg(feature = "native")]
 	pub gamepad_info: GamepadInfo,
+
 	pub viewport_screen_height: f32,
 	pub material: Material,
-	pub visible_objects: Vec<Vec<Object>>,
 	pub game_started: bool,
 	pub in_config: bool,
-	pub config_info: PlayerConfigInfo,
+	pub config_info: ConfigInfo,
 }
 
 pub fn init_players(class: PlayerClass, map: &Map) -> Vec<Player> {
 	(0..NUM_PLAYERS)
 		.into_iter()
-		.map(|i| Player::new(i, class, map.current_floor().current_spawn()))
+		.map(|_| Player::new(class, map.current_floor().current_spawn()))
 		.collect()
 }
 
@@ -43,9 +63,9 @@ pub fn init_game() -> GameInfo {
 
 	let players: Vec<_> = init_players(PlayerClass::Wizard, &map);
 
-	let viewport_screen_height = screen_height() * (1.0 / NUM_PLAYERS as f32);
+	let viewport_screen_height = screen_height(); // * (1.0 / NUM_PLAYERS as f32);
 
-	let cameras: Vec<Camera2D> = players
+	let cameras: Vec<Camera2D> = players[0..1]
 		.iter()
 		.enumerate()
 		.map(|(i, p)| Camera2D {
@@ -106,21 +126,26 @@ pub fn init_game() -> GameInfo {
 	root_ui().push_skin(&skin);
 
 	GameInfo {
-		players,
-		attacks,
-		map,
+		accumulator: Duration::ZERO,
+		last_update: Instant::now(),
+		frames_to_skip: 0,
+		game_state: GameState {
+			frame: 0,
+			players,
+			attacks,
+			map,
+		},
 		cameras,
+		#[cfg(feature = "native")]
 		gamepad_info: GamepadInfo {
 			active_gamepad,
 			gilrs,
 		},
+
 		viewport_screen_height,
 		material,
-		visible_objects: Vec::new(),
 		game_started: false,
 		in_config: false,
-		config_info: PlayerConfigInfo {
-			class: PlayerClass::Warrior,
-		},
+		config_info: ConfigInfo::default(),
 	}
 }

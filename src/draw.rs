@@ -1,15 +1,37 @@
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 
+use macroquad::miniquad::fs;
 use macroquad::prelude::*;
+
+include!(concat!(env!("OUT_DIR"), "/assets.rs"));
 
 pub type Textures = Lazy<HashMap<String, Texture2D>>;
 
-pub static mut TEXTURES: Textures = Lazy::new(|| HashMap::new());
+pub static TEXTURES: Textures = Lazy::new(|| {
+	let textures = Arc::new(Mutex::new(HashMap::new()));
 
-pub fn load_my_image(image_name: &str) -> Texture2D {
-	unsafe { *TEXTURES.get(image_name).unwrap() }
-}
+	for asset_name in ASSETS {
+		let path = format!("assets/{asset_name}");
+		let textures = textures.clone();
+
+		fs::load_file(&path, move |bytes| {
+			let texture =
+				Texture2D::from_file_with_format(&bytes.unwrap(), Some(ImageFormat::WebP));
+			textures
+				.lock()
+				.unwrap()
+				.insert(asset_name.to_string(), texture);
+		});
+	}
+
+	let textures = textures.lock().unwrap();
+
+	textures.clone()
+});
+
+pub fn load_my_image(image_name: &str) -> Texture2D { *TEXTURES.get(image_name).unwrap() }
 
 /*
 pub fn load_my_image(image_name: &str) -> Texture2D {

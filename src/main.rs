@@ -1,4 +1,5 @@
 mod attacks;
+mod config;
 mod draw;
 mod enchantments;
 mod init_game;
@@ -7,27 +8,29 @@ mod items;
 mod map;
 mod math;
 mod monsters;
+mod net;
 mod player;
 
-use std::io::{self, Write};
+use std::time::{Duration, Instant};
 
 use attacks::*;
 use draw::*;
 use egui::{FontId, RichText};
-#[cfg(feature = "native")]
-use gilrs::Gilrs;
+use ggrs::{GGRSEvent, P2PSession, SessionState};
 use init_game::*;
 use input::*;
-use macroquad::miniquad::{BlendFactor, BlendState, BlendValue, Equation};
 use map::*;
 use monsters::*;
+use net::{handle_requests, GGRSConfig};
 use player::*;
 
 use macroquad::miniquad::conf::Platform;
 use macroquad::prelude::*;
-use macroquad::ui::{root_ui, Skin};
+use macroquad::ui::root_ui;
 
-use crate::enchantments::{Enchantable, EnchantmentKind};
+use rayon::prelude::*;
+
+use crate::enchantments::EnchantmentKind;
 use crate::math::AsPolygon;
 
 pub const MAX_VIEW_OF_PLAYER: f32 = 200.0;
@@ -68,11 +71,76 @@ void main() {
 
 const CAMERA_ZOOM: f32 = 0.0045;
 
-pub const NUM_PLAYERS: usize = 1;
+pub const NUM_PLAYERS: usize = 2;
 
-include!(concat!(env!("OUT_DIR"), "/assets.rs"));
+pub const FPS: f64 = 60.0;
+
+pub static mut NET_SESSION: Option<P2PSession<GGRSConfig>> = None;
 
 fn update_game(game_info: &mut GameInfo) -> Option<Screen> {
+	if let Some(net_session) = unsafe { &mut NET_SESSION } {
+		net_session.poll_remote_clients();
+
+		net_session.events().for_each(|ev| {
+			if let GGRSEvent::WaitRecommendation { skip_frames } = ev {
+				game_info.frames_to_skip = skip_frames
+			}
+		});
+
+		if game_info.frames_to_skip > 0 {
+			game_info.frames_to_skip -= 1;
+			render_game(game_info);
+			return None;
+		}
+
+		let mut fps_delta = 1. / FPS;
+		if net_session.frames_ahead() > 0 {
+			fps_delta *= 1.1;
+		}
+
+		// get delta time from last iteration and accumulate it
+		let delta = Instant::now().duration_since(game_info.last_update);
+		game_info.accumulator = game_info.accumulator.saturating_add(delta);
+		game_info.last_update = Instant::now();
+
+		while game_info.accumulator.as_secs_f64() > fps_delta {
+			game_info.accumulator = game_info
+				.accumulator
+				.saturating_sub(Duration::from_secs_f64(fps_delta));
+
+			// Frames are only happening if sessions are synced
+			if net_session.current_state() == SessionState::Running {
+				// Add input for all local players
+				let local_input = movement_input(
+					&game_info.game_state.players[0],
+					Some(0),
+					&game_info.cameras[0],
+				);
+
+				net_session
+					.local_player_handles()
+					.into_iter()
+					.for_each(|handle| {
+						net_session.add_local_input(handle, local_input).unwrap();
+					});
+
+				match net_session.advance_frame() {
+					Ok(requests) => {
+						handle_requests(requests, game_info);
+					},
+					Err(ggrs::GGRSError::PredictionThreshold) => {
+						// println!("Frame {} skipped",
+						// net_session.current_frame());
+					},
+					Err(e) => println!("{e:?}"),
+				}
+			}
+		}
+	}
+
+	render_game(game_info);
+
+	/*
 	#[cfg(feature = "native")]
 	while let Some(gilrs::Event {
 		id,
@@ -83,6 +151,7 @@ fn update_game(game_info: &mut GameInfo) -> Option<Screen> {
 		game_info.gamepad_info.active_gamepad = Some(id);
 	}
 
+
 	game_info.viewport_screen_height = screen_height() * (1.0 / NUM_PLAYERS as f32);
 
 	// Logic
@@ -91,25 +160,9 @@ fn update_game(game_info: &mut GameInfo) -> Option<Screen> {
 		.iter_mut()
 		.for_each(|player| player.update_enchantments());
 
-	movement_input(
-		&mut game_info.players[0],
-		Some(0),
-		&mut game_info.attacks,
-		game_info.map.current_floor_mut(),
-		&game_info.cameras[0],
-	);
-
 	#[cfg(feature = "native")]
 	if let Some(gamepad_id) = game_info.gamepad_info.active_gamepad {
 		let gamepad = game_info.gamepad_info.gilrs.gamepad(gamepad_id);
-
-		movement_input_controller(
-			&mut game_info.players[1],
-			Some(1),
-			&mut game_info.attacks,
-			game_info.map.current_floor_mut(),
-			&gamepad,
-		);
 
 		door_interaction_input_controller(
 			&game_info.players[1],
@@ -125,21 +178,6 @@ fn update_game(game_info: &mut GameInfo) -> Option<Screen> {
 		game_info.map.current_floor_mut(),
 	);
 
-	trigger_traps(&mut game_info.players, game_info.map.current_floor_mut());
-	set_effects(&mut game_info.players, game_info.map.current_floor_mut());
-	update_effects(&mut game_info.map.current_floor_mut().floor);
-	update_cooldowns(&mut game_info.players);
-	update_attacks(
-		&mut game_info.players,
-		game_info.map.current_floor_mut(),
-		&mut game_info.attacks,
-	);
-	update_monsters(
-		&mut game_info.players,
-		game_info.map.current_floor_mut(),
-		&mut game_info.attacks,
-	);
-
 	if game_info
 		.map
 		.current_floor()
@@ -147,8 +185,7 @@ fn update_game(game_info: &mut GameInfo) -> Option<Screen> {
 	{
 		game_info.map.descend(&mut game_info.players);
 	}
-
-	render_game(game_info);
+	*/
 
 	None
 }
@@ -161,152 +198,136 @@ fn render_game(game_info: &mut GameInfo) {
 		game_info.cameras[0].viewport.unwrap().3 as f32,
 	);
 
-	game_info.visible_objects.clear();
+	let current_floor = game_info.game_state.map.current_floor_mut();
 
-	game_info.players.iter().for_each(|player| {
-		game_info.visible_objects.push(
-			Floor::visible_objects_mut(
-				player,
-				None,
-				game_info.map.current_floor_mut().floor.objects_mut(),
-			)
-			.into_iter()
-			.cloned()
-			.collect(),
-		)
+	let exit = current_floor.exit().clone();
+
+	let objects = current_floor.floor.objects_mut();
+
+	let monsters = &mut current_floor.monsters;
+
+	objects
+		.par_iter_mut()
+		.for_each(|obj| obj.clear_currently_visible());
+
+	game_info.game_state.players.iter().for_each(|player| {
+		Floor::set_visible_objects(player, None, objects);
 	});
 
-	let only_show_past_seen_objects = |obj: &&Object| -> bool {
-		let is_currently_visible = game_info
-			.visible_objects
-			.iter()
-			.flatten()
-			.any(|v_obj| v_obj.tile_pos() == obj.tile_pos());
-
-		obj.has_been_seen() && !is_currently_visible
-	};
-
-	// Draw all objects that have been seen
-	let seen_objects = game_info
-		.map
-		.current_floor()
-		.floor
-		.objects()
+	// Draw all objects that have been seen in the past but are not visible now
+	let seen_objects = objects
 		.iter()
-		.filter(only_show_past_seen_objects);
+		.filter(|object: &&Object| object.has_been_seen() && !object.currently_visible());
 
-	let monsters_to_draw = game_info.map.current_floor().monsters.iter().filter(|m| {
+	let visible_objects: Vec<&Object> = objects
+		.iter()
+		.filter(|object| object.currently_visible())
+		.collect();
+
+	let monsters_to_draw = monsters.iter().filter(|m| {
 		let monster_tile_pos = pos_to_tile(&m.as_polygon());
-		game_info
-			.visible_objects
+		visible_objects
 			.iter()
-			.flatten()
 			.any(|obj| obj.tile_pos() == monster_tile_pos)
 	});
 
-	game_info
-		.cameras
-		.iter_mut()
-		.zip(game_info.players.iter())
-		.enumerate()
-		.for_each(|(i, (camera, player))| {
-			camera.target = player.center();
+	let player = &game_info.game_state.players[0];
+	let camera = &mut game_info.cameras[0];
 
-			camera.zoom = Vec2::new(
-				CAMERA_ZOOM,
-				-CAMERA_ZOOM * (screen_width() / game_info.viewport_screen_height),
-			) * 0.7;
-			camera.viewport = Some((
-				0,
-				game_info.viewport_screen_height as i32 * i as i32,
-				screen_width() as i32,
-				game_info.viewport_screen_height as i32,
-			));
+	camera.target = player.center();
 
-			set_camera(camera);
+	camera.zoom = Vec2::new(
+		CAMERA_ZOOM,
+		-CAMERA_ZOOM * (screen_width() / game_info.viewport_screen_height),
+	) * 0.7;
+	camera.viewport = Some((
+		0,
+		game_info.viewport_screen_height as i32 * 0 as i32,
+		screen_width() as i32,
+		game_info.viewport_screen_height as i32,
+	));
 
-			if player
-				.enchantments()
-				.get(&EnchantmentKind::Blinded)
-				.is_none()
-			{
-				gl_use_material(game_info.material);
-				game_info
-					.material
-					.set_uniform("lowest_light_level", 0.6_f32);
+	set_camera(camera);
 
-				game_info.visible_objects.iter().flatten().for_each(|o| {
-					o.draw();
-					o.items().iter().rev().for_each(|item| {
-						item.draw();
-					});
-				});
+	if player
+		.enchantments()
+		.get(&EnchantmentKind::Blinded)
+		.is_none()
+	{
+		gl_use_material(game_info.material);
+		game_info
+			.material
+			.set_uniform("lowest_light_level", 0.6_f32);
 
-				// Draw all monsters on top of a visible object tile
-				monsters_to_draw.clone().for_each(|m| m.draw());
-
-				game_info
-					.material
-					.set_uniform("lowest_light_level", 0.25_f32);
-
-				seen_objects.clone().for_each(|o| {
-					o.draw();
-				});
-
-				game_info.map.current_floor().exit().draw();
-
-				game_info
-					.material
-					.set_uniform("lowest_light_level", 0.6_f32);
-				game_info
-					.visible_objects
-					.iter()
-					.flatten()
-					.flat_map(|o| o.items().iter())
-					.for_each(|i| i.draw());
-
-				game_info
-					.material
-					.set_uniform("lowest_light_level", 1.0_f32);
-
-				game_info.attacks.iter().for_each(|a| a.draw());
-			}
-
-			gl_use_default_material();
-			game_info.players.iter().for_each(|p| p.draw());
-
-			// Draw UI
-			set_default_camera();
-			draw_inventory(player);
-
-			root_ui().label(
-				Vec2::new(
-					(camera.viewport.unwrap().2 - 150) as f32,
-					camera.viewport.unwrap().1 as f32,
-				),
-				&format!("HP: {}", player.hp()),
-			);
-			root_ui().label(
-				Vec2::new(
-					(camera.viewport.unwrap().2 - 150) as f32,
-					(camera.viewport.unwrap().1 + 10) as f32,
-				),
-				&format!("MP: {}", player.mp()),
-			);
-
-			if let Some(spell) = player.spells().first() {
-				root_ui().label(
-					Vec2::new(
-						(camera.viewport.unwrap().2 - 150) as f32,
-						(camera.viewport.unwrap().1 + 20) as f32,
-					),
-					&match player.changing_spell {
-						false => format!("Spell: {}", spell),
-						true => "Cycling Spell...".to_string(),
-					},
-				);
-			}
+		visible_objects.iter().for_each(|o| {
+			o.draw();
+			o.items().iter().rev().for_each(|item| {
+				item.draw();
+			});
 		});
+
+		// Draw all monsters on top of a visible object tile
+		monsters_to_draw.for_each(|m| m.draw());
+
+		game_info
+			.material
+			.set_uniform("lowest_light_level", 0.25_f32);
+
+		seen_objects.for_each(|o| {
+			o.draw();
+		});
+
+		exit.draw();
+
+		game_info
+			.material
+			.set_uniform("lowest_light_level", 0.6_f32);
+
+		visible_objects
+			.iter()
+			.flat_map(|o| o.items().iter())
+			.for_each(|i| i.draw());
+
+		game_info
+			.material
+			.set_uniform("lowest_light_level", 1.0_f32);
+
+		game_info.game_state.attacks.iter().for_each(|a| a.draw());
+	}
+
+	gl_use_default_material();
+	game_info.game_state.players.iter().for_each(|p| p.draw());
+
+	// Draw UI
+	draw_inventory(player);
+
+	root_ui().label(
+		Vec2::new(
+			(camera.viewport.unwrap().2 - 150) as f32,
+			camera.viewport.unwrap().1 as f32,
+		),
+		&format!("HP: {}", player.hp()),
+	);
+	root_ui().label(
+		Vec2::new(
+			(camera.viewport.unwrap().2 - 150) as f32,
+			(camera.viewport.unwrap().1 + 10) as f32,
+		),
+		&format!("MP: {}", player.mp()),
+	);
+
+	if let Some(spell) = player.spells().first() {
+		root_ui().label(
+			Vec2::new(
+				(camera.viewport.unwrap().2 - 150) as f32,
+				(camera.viewport.unwrap().1 + 20) as f32,
+			),
+			&match player.changing_spell {
+				false => format!("Spell: {}", spell),
+				true => "Cycling Spell...".to_string(),
+			},
+		);
+	}
 }
 
 enum Screen {
@@ -343,7 +364,9 @@ fn update_main_menu(game_info: &mut GameInfo) -> Option<Screen> {
 					)
 					.clicked()
 				{
-					game_info.players = init_players(game_info.config_info.class, &game_info.map);
+					let config_info = game_info.config_info.clone();
+					config_info.set_config(game_info);
+
 					new_screen = Some(Screen::Game);
 				}
 
@@ -390,20 +413,58 @@ fn config_game_update(game_info: &mut GameInfo) -> Option<Screen> {
 					let mut class_button = |class: PlayerClass| {
 						if ui
 							.radio(
-								&game_info.config_info.class == &class,
+								&game_info.config_info.class() == &class,
 								RichText::new(class.to_string())
 									.strong()
 									.font(FontId::proportional(30.0)),
 							)
 							.clicked()
 						{
-							game_info.config_info.class = class;
+							game_info.config_info.set_class(class);
 						}
 					};
 
 					class_button(PlayerClass::Warrior);
 					class_button(PlayerClass::Wizard);
 					class_button(PlayerClass::Rogue);
+				});
+
+				ui.horizontal(|ui| {
+					ui.label(
+						RichText::new("Local Port: ")
+							.strong()
+							.font(FontId::proportional(30.0)),
+					);
+
+					let mut local_port_str = game_info.config_info.local_port().to_string();
+
+					ui.text_edit_singleline(&mut local_port_str);
+
+					let new_local_port: u16 = match local_port_str.parse() {
+						Ok(port) => port,
+						Err(_) => 0,
+					};
+
+					game_info.config_info.set_local_port(new_local_port);
+				});
+
+				ui.horizontal(|ui| {
+					ui.label(
+						RichText::new("Remote Port: ")
+							.strong()
+							.font(FontId::proportional(30.0)),
+					);
+
+					let mut remote_port_str = game_info.config_info.remote_port().to_string();
+
+					ui.text_edit_singleline(&mut remote_port_str);
+
+					let new_remote_port: u16 = match remote_port_str.parse() {
+						Ok(port) => port,
+						Err(_) => 0,
+					};
+
+					game_info.config_info.set_remote_port(new_remote_port);
 				});
 
 				if ui
@@ -427,16 +488,7 @@ fn config_game_update(game_info: &mut GameInfo) -> Option<Screen> {
 
 #[macroquad::main(window_conf)]
 async fn main() {
-	for asset_name in ASSETS {
-		let path = format!("assets/{asset_name}");
-		let texture = load_texture(&path).await.unwrap();
-
-		unsafe {
-			TEXTURES.insert(asset_name.to_string(), texture);
-		}
-	}
-
-	rand::srand(main as u64);
+	rand::srand(1000);
 
 	let mut game_info = init_game();
 

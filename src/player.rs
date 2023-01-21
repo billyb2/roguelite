@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 use std::fmt::Display;
 
+use serde::Serialize;
+
 use crate::attacks::*;
 use crate::draw::Drawable;
 use crate::enchantments::{Enchantable, Enchantment, EnchantmentKind};
@@ -11,10 +13,6 @@ use crate::math::{aabb_collision, easy_polygon, AsPolygon, Polygon};
 use macroquad::prelude::*;
 
 pub const PLAYER_SIZE: f32 = 12.0;
-
-pub struct PlayerConfigInfo {
-	pub class: PlayerClass,
-}
 
 #[derive(Copy, Clone, PartialEq)]
 pub enum PlayerClass {
@@ -48,7 +46,7 @@ impl TryFrom<&str> for PlayerClass {
 }
 
 /// Info regarding points such as HP or MP
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize)]
 struct PointInfo {
 	/// Currently number of points
 	points: u16,
@@ -58,7 +56,7 @@ struct PointInfo {
 	time_til_regen: u16,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Serialize)]
 pub enum Spell {
 	BlindingLight,
 	MagicMissile,
@@ -73,18 +71,19 @@ impl Display for Spell {
 	}
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, Serialize)]
 pub struct ItemSelectedInfo {
 	pub index: usize,
 	pub selection_type: SelectionType,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub enum SelectionType {
 	Hovered,
 	Selected,
 }
 
+#[derive(Clone, Serialize)]
 pub struct PlayerInventory {
 	primary_item: Option<ItemInfo>,
 	secondary_item: Option<ItemInfo>,
@@ -122,10 +121,10 @@ impl PlayerInventory {
 	}
 }
 
+#[derive(Clone, Serialize)]
 pub struct Player {
 	pub angle: f32,
 	pub pos: Vec2,
-	index: usize,
 	speed: f32,
 	hp: PointInfo,
 	mp: PointInfo,
@@ -152,7 +151,7 @@ pub struct Player {
 }
 
 impl Player {
-	pub fn new(index: usize, class: PlayerClass, pos: Vec2) -> Self {
+	pub fn new(class: PlayerClass, pos: Vec2) -> Self {
 		let primary_item = Some(match class {
 			PlayerClass::Warrior => ItemInfo::new(ShortSword, None),
 			PlayerClass::Wizard => ItemInfo::new(WizardGlove, None),
@@ -231,7 +230,6 @@ impl Player {
 
 		Self {
 			pos,
-			index,
 			angle: 0.0,
 			speed: 2.2,
 			primary_cooldown: 0,
@@ -391,8 +389,8 @@ pub fn update_cooldowns(players: &mut [Player]) {
 }
 
 pub fn player_attack(
-	player: &mut Player, index: Option<usize>, attacks: &mut Vec<Box<dyn Attack>>,
-	floor: &FloorInfo, is_primary: bool,
+	player: &mut Player, index: Option<usize>, attacks: &mut Vec<AttackObj>, floor: &FloorInfo,
+	is_primary: bool,
 ) {
 	let cooldown = match is_primary {
 		true => &player.primary_cooldown,
@@ -449,7 +447,7 @@ pub enum DoorInteraction {
 }
 
 pub fn interact_with_door<A: AsPolygon>(
-	entity: &A, players: &[Player], door_interaction: DoorInteraction, floor_info: &mut FloorInfo,
+	entity: &A, door_interaction: DoorInteraction, floor_info: &mut FloorInfo,
 ) {
 	// First, see if the player is in contact with a door
 	let entity_tile_pos = pos_to_tile(entity);
@@ -467,7 +465,6 @@ pub fn interact_with_door<A: AsPolygon>(
 				.monsters
 				.iter()
 				.map(|m| pos_to_tile(&m.as_polygon()))
-				.chain(players.iter().map(|p| pos_to_tile(p)))
 				.any(|pos| pos == door.tile_pos());
 
 			// You can't open or close doors that you're inside of

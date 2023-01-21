@@ -3,16 +3,17 @@ use crate::map::{Floor, FloorInfo};
 use crate::math::{aabb_collision_dir, easy_polygon, get_angle, AsPolygon, Polygon};
 use crate::player::{DamageInfo, Player};
 use macroquad::prelude::*;
+use serde::Serialize;
 
 use super::Attack;
 
 const HALF_SIZE: Vec2 = Vec2::new(7.5, 7.5);
 const SIZE: Vec2 = Vec2::new(15.0, 15.0);
 
+#[derive(Clone, Serialize)]
 pub struct MagicMissile {
 	pos: Vec2,
 	angle: f32,
-	texture: Texture2D,
 	time: u16,
 	bounces: u16,
 	player_index: usize,
@@ -21,15 +22,14 @@ pub struct MagicMissile {
 impl Attack for MagicMissile {
 	fn new(
 		aabb: &dyn AsPolygon, index: Option<usize>, angle: f32, _floor: &Floor, _is_primary: bool,
-	) -> Box<Self> {
-		Box::new(Self {
+	) -> Self {
+		Self {
 			pos: aabb.center(),
 			angle,
-			texture: load_my_image("magic_missile.webp"),
 			time: 0,
 			bounces: 0,
 			player_index: index.unwrap(),
-		})
+		}
 	}
 
 	fn side_effects(&self, player: &mut Player, floor: &Floor) {
@@ -133,5 +133,5 @@ impl Drawable for MagicMissile {
 
 	fn rotation(&self) -> f32 { self.angle }
 
-	fn texture(&self) -> Option<Texture2D> { Some(self.texture) }
+	fn texture(&self) -> Option<Texture2D> { Some(load_my_image("magic_missile.webp")) }
 }

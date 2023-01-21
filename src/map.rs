@@ -6,6 +6,7 @@ use macroquad::rand::*;
 use pathfinding::prelude::*;
 #[cfg(feature = "native")]
 use rayon::prelude::*;
+use serde::Serialize;
 
 use crate::draw::{load_my_image, Drawable};
 use crate::enchantments::{Enchantable, Enchantment, EnchantmentKind};
@@ -19,7 +20,7 @@ use crate::math::{
 	AsPolygon,
 	Polygon,
 };
-use crate::monsters::{Monster, SmallRat};
+use crate::monsters::{GreenSlime, Monster, MonsterObj, SmallRat};
 use crate::player::Player;
 
 pub const TILE_SIZE: usize = 25;
@@ -29,24 +30,24 @@ pub const MAP_HEIGHT_TILES: usize = 50;
 
 pub const MAP_SIZE_TILES: IVec2 = IVec2::new(MAP_WIDTH_TILES as i32, MAP_HEIGHT_TILES as i32);
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Serialize)]
 enum TrapType {
 	Teleport,
 	SpawnMonster,
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Serialize)]
 struct Trap {
 	triggered: bool,
 	trap_type: TrapType,
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Serialize)]
 enum EffectType {
 	Slimed,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 struct Effect {
 	time_til_dissipate: Option<u16>,
 	effect_type: EffectType,
@@ -61,12 +62,12 @@ impl Into<Enchantment> for EffectType {
 	}
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 pub struct Object {
 	pos: IVec2,
-	texture: Texture2D,
 	is_floor: bool,
 	has_been_seen: bool,
+	is_currently_visible: bool,
 	items: Vec<ItemInfo>,
 	door: Option<Door>,
 	trap: Option<Trap>,
@@ -77,8 +78,8 @@ impl Default for Object {
 	fn default() -> Self {
 		Self {
 			pos: IVec2::ZERO,
-			texture: Texture2D::empty(),
 			is_floor: false,
+			is_currently_visible: false,
 			has_been_seen: false,
 			items: Vec::new(),
 			door: None,
@@ -116,17 +117,19 @@ impl Object {
 
 	pub fn open_door(&mut self) {
 		if let Some(door) = &mut self.door {
-			self.texture = load_my_image("open_door.webp");
 			door.open();
 		}
 	}
 
 	pub fn close_door(&mut self) {
 		if let Some(door) = &mut self.door {
-			self.texture = load_my_image("door.webp");
 			door.close();
 		}
 	}
+
+	pub fn clear_currently_visible(&mut self) { self.is_currently_visible = false; }
+
+	pub fn currently_visible(&self) -> bool { self.is_currently_visible }
 }
 
 impl AsPolygon for Object {
@@ -144,7 +147,7 @@ impl AsPolygon for &Object {
 	fn as_polygon(&self) -> Polygon { (*self).as_polygon() }
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Serialize)]
 pub struct Door {
 	pos: IVec2,
 	pub is_open: bool,
@@ -156,6 +159,7 @@ impl Door {
 	pub fn close(&mut self) { self.is_open = false; }
 }
 
+#[derive(Clone, Serialize)]
 pub struct Room {
 	top_left: IVec2,
 	bottom_right: IVec2,
@@ -195,14 +199,8 @@ impl Room {
 			.map(|w_pos| {
 				let door = self.doors.iter().find(|d| d.pos == w_pos).copied();
 
-				let texture = load_my_image(match door.is_some() {
-					true => "door.webp",
-					false => "black.webp",
-				});
-
 				Object {
 					pos: w_pos,
-					texture,
 					is_floor: false,
 					trap: None,
 					has_been_seen: false,
@@ -230,7 +228,7 @@ impl Room {
 				false => None,
 			};
 
-			let texture = match is_trap {
+			let _texture = match is_trap {
 				true => load_my_image("trap.webp"),
 				false => load_my_image("light_gray.webp"),
 			};
@@ -249,7 +247,6 @@ impl Room {
 
 			Object {
 				pos,
-				texture,
 				is_floor: true,
 				has_been_seen: false,
 				door: None,
@@ -277,11 +274,12 @@ impl Room {
 	pub fn center(&self) -> IVec2 { (self.top_left + self.bottom_right) / 2 }
 }
 
+#[derive(Clone, Serialize)]
 pub struct FloorInfo {
 	spawn: Vec2,
-	monster_types: Vec<fn(Vec2) -> Box<dyn Monster>>,
+	monster_types: Vec<MonsterObj>,
 	item_types: Vec<ItemType>,
-	pub monsters: Vec<Box<dyn Monster>>,
+	pub monsters: Vec<MonsterObj>,
 	pub floor: Floor,
 	rooms: Vec<Room>,
 	exit: Object,
@@ -501,7 +499,6 @@ impl FloorInfo {
 				[
 					Object {
 						pos: IVec2::new(x, 0),
-						texture: load_my_image("black.webp"),
 						door: None,
 						has_been_seen: false,
 						is_floor: false,
@@ -511,7 +508,6 @@ impl FloorInfo {
 					},
 					Object {
 						pos: IVec2::new(x, MAP_HEIGHT_TILES as i32),
-						texture: load_my_image("black.webp"),
 						door: None,
 						has_been_seen: false,
 						is_floor: false,
@@ -527,7 +523,6 @@ impl FloorInfo {
 				[
 					Object {
 						pos: IVec2::new(0, y),
-						texture: load_my_image("black.webp"),
 						door: None,
 						has_been_seen: false,
 						is_floor: false,
@@ -538,7 +533,6 @@ impl FloorInfo {
 					},
 					Object {
 						pos: IVec2::new(MAP_WIDTH_TILES as i32, y),
-						texture: load_my_image("black.webp"),
 						door: None,
 						has_been_seen: false,
 						is_floor: false,
@@ -570,7 +564,6 @@ impl FloorInfo {
 				if is_dungeon_wall {
 					Some(Object {
 						pos,
-						texture: load_my_image("black.webp"),
 						is_floor: false,
 						has_been_seen: false,
 						items: Vec::new(),
@@ -592,7 +585,6 @@ impl FloorInfo {
 			.iter()
 			.map(|&pos| Object {
 				pos,
-				texture: load_my_image("light_gray.webp"),
 				door: None,
 				has_been_seen: false,
 				items: Vec::new(),
@@ -639,7 +631,6 @@ impl FloorInfo {
 				Some(obj) => obj,
 				None => Object {
 					pos: IVec2::new((i % MAP_WIDTH_TILES) as i32, (i / MAP_HEIGHT_TILES) as i32),
-					texture: load_my_image("black.webp"),
 					..Default::default()
 				},
 			})
@@ -648,7 +639,7 @@ impl FloorInfo {
 		let floor = Floor { objects };
 
 		let mut floor_info = FloorInfo {
-			monster_types: vec![SmallRat::new],
+			monster_types: vec![MonsterObj::SmallRat(SmallRat::new(Vec2::ZERO))],
 			item_types: vec![
 				ItemType::Gold(20),
 				ItemType::Potion(PotionType::Regeneration),
@@ -658,7 +649,6 @@ impl FloorInfo {
 			rooms,
 			exit: Object {
 				pos: exit_pos,
-				texture: load_my_image("green.webp"),
 				door: None,
 				has_been_seen: false,
 				trap: None,
@@ -701,8 +691,11 @@ impl FloorInfo {
 			let monster_types = &self.monster_types;
 
 			(0..rand::gen_range(0, 6)).into_iter().map(move |_| {
-				let monster_fn = monster_types.choose().unwrap();
-				monster_fn(pos)
+				let monster = monster_types.choose().unwrap();
+				match monster {
+					MonsterObj::SmallRat(_) => MonsterObj::SmallRat(SmallRat::new(pos)),
+					MonsterObj::GreenSlime(_) => MonsterObj::GreenSlime(GreenSlime::new(pos)),
+				}
 			})
 		}));
 	}
@@ -719,6 +712,7 @@ impl FloorInfo {
 	pub fn current_spawn(&self) -> Vec2 { self.spawn }
 }
 
+#[derive(Clone, Serialize)]
 pub struct Floor {
 	objects: Vec<Object>,
 }
@@ -748,10 +742,10 @@ impl Floor {
 			object.is_collidable() && aabb_collision(aabb, *object, distance)
 		};
 
-		#[cfg(feature = "native")]
-		return self.objects.par_iter().find_any(check_collidable_obj);
+		// #[cfg(feature = "native")]
+		// return self.objects.iter().find_any(check_collidable_obj);
 
-		#[cfg(not(feature = "native"))]
+		// #[cfg(not(feature = "native"))]
 		self.objects.iter().find(check_collidable_obj)
 	}
 
@@ -777,6 +771,7 @@ impl Floor {
 			collision_info | obj_collision_info
 		};
 
+		/*
 		#[cfg(feature = "native")]
 		return self
 			.objects
@@ -785,10 +780,13 @@ impl Floor {
 			.reduce(|| glam::BVec2::new(false, false), collision_reduction);
 
 		#[cfg(not(feature = "native"))]
+		*/
+		const BVEC2_FALSE: BVec2 = BVec2::new(false, false);
+
 		self.objects
 			.iter()
 			.filter_map(collidable_filter)
-			.fold(glam::BVec2::new(false, false), collision_reduction)
+			.fold(BVEC2_FALSE, collision_reduction)
 	}
 
 	pub fn doors(&mut self) -> impl Iterator<Item = &mut Object> {
@@ -819,9 +817,7 @@ impl Floor {
 		)
 	}
 
-	pub fn visible_objects_mut<'a, A: AsPolygon>(
-		aabb: &A, size: Option<i32>, objects: &'a mut [Object],
-	) -> Vec<&'a Object> {
+	pub fn set_visible_objects<A: AsPolygon>(aabb: &A, size: Option<i32>, objects: &mut [Object]) {
 		let center_tile = pos_to_tile(aabb);
 
 		let edges = points_on_circumference(center_tile, size.unwrap_or(12));
@@ -846,15 +842,10 @@ impl Floor {
 			}
 		}
 
-		visible_object_indices
-			.iter()
-			.copied()
-			.for_each(|i| objects[i].has_been_seen = true);
-
-		visible_object_indices
-			.into_iter()
-			.map(|i| &objects[i])
-			.collect()
+		visible_object_indices.iter().copied().for_each(|i| {
+			objects[i].has_been_seen = true;
+			objects[i].is_currently_visible = true;
+		});
 	}
 
 	pub fn visible_objects<A: AsPolygon>(&self, aabb: &A, size: Option<i32>) -> Vec<&Object> {
@@ -888,6 +879,7 @@ impl Floor {
 	pub fn objects_mut(&mut self) -> &mut [Object] { &mut self.objects }
 }
 
+#[derive(Clone, Serialize)]
 pub struct Map {
 	current_floor_index: usize,
 	rooms: Vec<FloorInfo>,
@@ -927,7 +919,18 @@ impl Drawable for Object {
 
 	fn size(&self) -> Vec2 { Vec2::splat(TILE_SIZE as f32) }
 
-	fn texture(&self) -> Option<Texture2D> { Some(self.texture) }
+	fn texture(&self) -> Option<Texture2D> {
+		Some(match self.is_floor {
+			true => load_my_image("light_gray.webp"),
+			false => match self.door {
+				Some(door) => match door.is_open {
+					false => load_my_image("door.webp"),
+					true => load_my_image("open_door.webp"),
+				},
+				None => load_my_image("black.webp"),
+			},
+		})
+	}
 }
 
 fn find_viable_neighbors(
@@ -1066,7 +1069,12 @@ pub fn trigger_traps(players: &mut [Player], floor_info: &mut FloorInfo) {
 
 							let pos = (tile_pos * IVec2::splat(TILE_SIZE as i32)).as_vec2();
 
-							floor_info.monster_types.choose().unwrap()(pos)
+							match floor_info.monster_types.choose().unwrap() {
+								MonsterObj::SmallRat(_) => MonsterObj::SmallRat(SmallRat::new(pos)),
+								MonsterObj::GreenSlime(_) => {
+									MonsterObj::GreenSlime(GreenSlime::new(pos))
+								},
+							}
 						}))
 					},
 				};
@@ -1090,7 +1098,7 @@ pub fn set_effects(players: &mut [Player], floor_info: &mut FloorInfo) {
 			floor_info
 				.monsters
 				.iter_mut()
-				.for_each(|monster| apply_effect(monster.as_mut(), effect_type));
+				.for_each(|monster| apply_effect(monster, effect_type));
 		});
 	});
 }

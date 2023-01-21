@@ -1,11 +1,13 @@
-#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+use serde::Serialize;
+
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Serialize)]
 pub enum EnchantmentKind {
 	Blinded,
 	Sticky,
 	Regenerating,
 }
 
-#[derive(PartialEq, Eq, Hash)]
+#[derive(Clone, PartialEq, Eq, Hash, Serialize)]
 pub struct Enchantment {
 	pub kind: EnchantmentKind,
 	pub strength: u8,

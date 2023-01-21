@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::attacks::{Attack, Slimeball};
+use crate::attacks::{Attack, AttackObj, Slimeball};
 use crate::draw::{load_my_image, Drawable};
 use crate::enchantments::{Enchantable, Enchantment, EnchantmentKind};
 use crate::map::{pos_to_tile, Floor, Object, TILE_SIZE};
@@ -10,16 +10,17 @@ use crate::player::{damage_player, DamageInfo, Player};
 
 use macroquad::prelude::*;
 use macroquad::rand::ChooseRandom;
+use serde::Serialize;
 
 use super::Effect;
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone, Serialize)]
 enum AttackMode {
 	Passive,
 	Attacking,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Serialize)]
 enum Target {
 	Pos(Vec2),
 }
@@ -27,10 +28,10 @@ enum Target {
 const SIZE: f32 = 14.0;
 const MAX_HEALTH: u16 = 15;
 
+#[derive(Clone, Serialize)]
 pub struct GreenSlime {
 	health: u16,
 	pos: Vec2,
-	texture: Texture2D,
 	attack_mode: AttackMode,
 	current_path: Option<(Vec<Vec2>, usize)>,
 	enchantments: HashMap<EnchantmentKind, Effect>,
@@ -42,20 +43,17 @@ pub struct GreenSlime {
 }
 
 impl Monster for GreenSlime {
-	fn new(pos: Vec2) -> Box<dyn Monster> {
-		let monster: Box<dyn Monster> = Box::new(Self {
+	fn new(pos: Vec2) -> Self {
+		Self {
 			pos,
 			health: MAX_HEALTH,
-			texture: load_my_image("green_slime.webp"),
 			attack_mode: AttackMode::Passive,
 			current_path: None,
 			current_target: None,
 			enchantments: HashMap::new(),
 			damaged_by: HashSet::new(),
 			time_til_attack: 30,
-		});
-
-		monster
+		}
 	}
 
 	fn movement(&mut self, players: &[Player], floor: &Floor) {
@@ -65,7 +63,7 @@ impl Monster for GreenSlime {
 		};
 	}
 
-	fn attack(&mut self, players: &[Player], floor: &Floor, attacks: &mut Vec<Box<dyn Attack>>) {
+	fn attack(&mut self, players: &[Player], floor: &Floor, attacks: &mut Vec<AttackObj>) {
 		self.time_til_attack = self.time_til_attack.saturating_sub(1);
 
 		if self.time_til_attack > 0 {
@@ -87,7 +85,7 @@ impl Monster for GreenSlime {
 			let slimeball = Slimeball::new(self, None, angle, &floor, true);
 
 			self.time_til_attack = slimeball.cooldown() as u8;
-			attacks.push(slimeball);
+			attacks.push(AttackObj::Slimeball(slimeball));
 		});
 	}
 
@@ -281,5 +279,5 @@ impl Drawable for GreenSlime {
 
 	fn size(&self) -> Vec2 { Vec2::splat(SIZE) }
 
-	fn texture(&self) -> Option<Texture2D> { Some(self.texture) }
+	fn texture(&self) -> Option<Texture2D> { Some(load_my_image("green_slime.webp")) }
 }

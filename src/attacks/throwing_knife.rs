@@ -4,16 +4,17 @@ use crate::map::{pos_to_tile, Floor, FloorInfo};
 use crate::math::{aabb_collision, easy_polygon, get_angle, AsPolygon, Polygon};
 use crate::player::{DamageInfo, Player, PLAYER_SIZE};
 use macroquad::prelude::*;
+use serde::Serialize;
 
 use super::Attack;
 
 const SIZE: Vec2 = Vec2::new(10.0, 20.0);
 
+#[derive(Clone, Serialize)]
 pub struct ThrownKnife {
 	pos: Vec2,
 	movement_angle: f32,
 	rotation_angle: f32,
-	texture: Texture2D,
 	time: u16,
 	player_index: usize,
 }
@@ -21,15 +22,14 @@ pub struct ThrownKnife {
 impl Attack for ThrownKnife {
 	fn new(
 		aabb: &dyn AsPolygon, index: Option<usize>, angle: f32, _floor: &Floor, _is_primary: bool,
-	) -> Box<Self> {
-		Box::new(Self {
+	) -> Self {
+		Self {
 			pos: aabb.center() - SIZE * 0.5,
 			movement_angle: angle,
 			rotation_angle: angle,
-			texture: load_my_image("throwing_knife.webp"),
 			time: 0,
 			player_index: index.unwrap(),
-		})
+		}
 	}
 
 	fn side_effects(&self, player: &mut Player, floor: &Floor) {
@@ -142,5 +142,5 @@ impl Drawable for ThrownKnife {
 
 	fn rotation(&self) -> f32 { self.rotation_angle }
 
-	fn texture(&self) -> Option<Texture2D> { Some(self.texture) }
+	fn texture(&self) -> Option<Texture2D> { Some(load_my_image("throwing_knife.webp")) }
 }
