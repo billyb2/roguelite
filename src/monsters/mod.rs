@@ -157,9 +157,9 @@ pub fn update_monsters(
 	let monsters_iter = floor_info.monsters.iter_mut();
 
 	#[cfg(feature = "native")]
-	let monsters_iter = floor_info.monsters.iter_mut();
+	let monsters_iter = floor_info.monsters.par_chunks_mut(4);
 
-	monsters_iter.for_each(|m| {
+	monsters_iter.flatten().for_each(|m| {
 		// Only move monsters that are within a certain distance of any player
 		m.update_enchantments();
 		m.movement(players, &floor_info.floor);

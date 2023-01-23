@@ -8,7 +8,6 @@ use crate::monsters::Monster;
 use crate::player::{damage_player, DamageInfo, Player};
 
 use macroquad::prelude::*;
-use macroquad::rand::ChooseRandom;
 use serde::Serialize;
 
 use super::Effect;
@@ -50,7 +49,7 @@ impl Monster for SmallRat {
 			pos,
 			health: MAX_HEALTH,
 			attack_mode: AttackMode::Passive,
-			time_til_move: rand::gen_range(0_u32, 180).try_into().unwrap(),
+			time_til_move: 60,
 			time_spent_moving: 0,
 			current_path: None,
 			current_target: None,
@@ -174,13 +173,15 @@ fn step_pathfinding<T: Fn(&mut SmallRat) -> Target>(
 					let angle = get_angle(*pos, my_monster.pos);
 					let change = Vec2::new(angle.cos(), angle.sin()) * speed * my_monster.speed_mul;
 
+					/*
 					if floor.collision(my_monster, change) {
 						// Only stop targetting when there is a door
 						my_monster.current_path = None;
 						my_monster.current_target = None;
 					} else {
-						my_monster.pos += change;
-					}
+						*/
+					my_monster.pos += change;
+					// }
 				}
 			} else {
 				// Finished following path
@@ -204,7 +205,7 @@ fn passive_mode(my_monster: &mut SmallRat, players: &[Player], floor: &Floor) {
 
 	let find_target = |_my_monster: &mut SmallRat| -> Target {
 		// Choose a random visible tile
-		let target_obj = visible_objects.choose().unwrap();
+		let target_obj = visible_objects.last().unwrap();
 		Target::Pos(target_obj.pos())
 	};
 
@@ -315,6 +316,13 @@ fn move_blindly(my_monster: &mut SmallRat, floor: &Floor) {
 			my_monster.time_til_move = 30;
 		}
 	} else {
+		rand::srand(
+			my_monster.pos.x as u64 +
+				my_monster.pos.y as u64 +
+				my_monster.time_spent_moving as u64 +
+				my_monster.time_til_move as u64,
+		);
+
 		let direction = Vec2::new(rand::gen_range(-1.0, 1.0), rand::gen_range(-1.0, 1.0));
 
 		my_monster.current_target = Some(Target::Pos(
