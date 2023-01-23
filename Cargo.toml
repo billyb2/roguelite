@@ -29,6 +29,7 @@ bytemuck = { version = "1" }
 bincode = "1"
 serde = "1"
 glam = { version = "0.21", features = ["serde"]}
+ron = { version = "0.8" }
 
 [features]
 default = ["native"]

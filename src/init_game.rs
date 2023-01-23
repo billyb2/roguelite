@@ -125,6 +125,8 @@ pub fn init_game() -> GameInfo {
 
 	root_ui().push_skin(&skin);
 
+	let config_info = ConfigInfo::new("./.game_config").unwrap_or_default();
+
 	GameInfo {
 		accumulator: Duration::ZERO,
 		last_update: Instant::now(),
@@ -146,6 +148,6 @@ pub fn init_game() -> GameInfo {
 		material,
 		game_started: false,
 		in_config: false,
-		config_info: ConfigInfo::default(),
+		config_info,
 	}
 }
