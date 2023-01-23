@@ -10,7 +10,11 @@ use crate::input::PlayerInput;
 use crate::map::{set_effects, trigger_traps, update_effects};
 use crate::monsters::update_monsters;
 use crate::player::{
-	interact_with_door, move_player, player_attack, update_cooldowns, DoorInteraction,
+	interact_with_door,
+	move_player,
+	player_attack,
+	update_cooldowns,
+	DoorInteraction,
 };
 use crate::FPS;
 
@@ -41,15 +45,23 @@ pub fn init_net(conf: &GGRSConfig) -> P2PSession<GGRSConfig> {
 	let local_sock = UdpNonBlockingSocket::bind_to_port(conf.local_port).unwrap();
 	let remote = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, conf.remote_port));
 
-	SessionBuilder::<GGRSConfig>::new()
-		.with_num_players(2)
+	let mut session = SessionBuilder::<GGRSConfig>::new()
+		.with_num_players(match conf.multiplayer {
+			true => 2,
+			false => 1,
+		})
 		.with_fps(FPS as usize)
 		.unwrap()
 		// .with_input_delay(1)
 		.add_player(ggrs::PlayerType::Local, 0)
-		.unwrap()
-		.add_player(ggrs::PlayerType::Remote(remote), 1)
-		.unwrap()
+		.unwrap();
+
+	if conf.multiplayer {
+		session = session
+			.add_player(ggrs::PlayerType::Remote(remote), 1)
+			.unwrap();
+	}
+	session
 		.with_sparse_saving_mode(true)
 		.start_p2p_session(local_sock)
 		.unwrap()

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::fmt::Display;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::attacks::*;
 use crate::draw::Drawable;
@@ -14,7 +14,7 @@ use macroquad::prelude::*;
 
 pub const PLAYER_SIZE: f32 = 12.0;
 
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Copy, Clone, PartialEq, Serialize, Deserialize)]
 pub enum PlayerClass {
 	Warrior,
 	Wizard,

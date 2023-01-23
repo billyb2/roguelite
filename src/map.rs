@@ -23,7 +23,7 @@ use crate::math::{
 use crate::monsters::{GreenSlime, Monster, MonsterObj, SmallRat};
 use crate::player::Player;
 
-pub const TILE_SIZE: usize = 25;
+pub const TILE_SIZE: usize = 30;
 
 pub const MAP_WIDTH_TILES: usize = 50;
 pub const MAP_HEIGHT_TILES: usize = 50;
@@ -742,10 +742,12 @@ impl Floor {
 			object.is_collidable() && aabb_collision(aabb, *object, distance)
 		};
 
-		// #[cfg(feature = "native")]
-		// return self.objects.iter().find_any(check_collidable_obj);
+		/*
+		#[cfg(feature = "native")]
+		return self.objects.par_iter().find_any(check_collidable_obj);
 
-		// #[cfg(not(feature = "native"))]
+		#[cfg(not(feature = "native"))]
+		*/
 		self.objects.iter().find(check_collidable_obj)
 	}
 
@@ -807,7 +809,7 @@ impl Floor {
 		&self, pos: &S, goal: &G, only_visible: bool, ignore_door_collision: bool,
 		randomness: Option<i32>,
 	) -> Option<Vec<Vec2>> {
-		find_path(
+		inner_find_path(
 			pos,
 			goal,
 			self,
@@ -976,7 +978,7 @@ fn find_viable_neighbors(
 		.collect()
 }
 
-pub fn find_path<S: AsPolygon, G: AsPolygon>(
+pub fn inner_find_path<S: AsPolygon, G: AsPolygon>(
 	start: &S, goal: &G, floor: &Floor, only_visible: bool, ignore_door_collision: bool,
 	randomness: Option<i32>,
 ) -> Option<Vec<Vec2>> {

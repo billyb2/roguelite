@@ -50,8 +50,8 @@ pub struct GameInfo {
 	pub config_info: ConfigInfo,
 }
 
-pub fn init_players(class: PlayerClass, map: &Map) -> Vec<Player> {
-	(0..NUM_PLAYERS)
+pub fn init_players(class: PlayerClass, map: &Map, num_players: usize) -> Vec<Player> {
+	(0..num_players)
 		.into_iter()
 		.map(|_| Player::new(class, map.current_floor().current_spawn()))
 		.collect()
@@ -61,7 +61,7 @@ pub fn init_game() -> GameInfo {
 	let attacks = Vec::new();
 	let map = Map::new();
 
-	let players: Vec<_> = init_players(PlayerClass::Wizard, &map);
+	let players: Vec<_> = init_players(PlayerClass::Wizard, &map, 1);
 
 	let viewport_screen_height = screen_height(); // * (1.0 / NUM_PLAYERS as f32);
 

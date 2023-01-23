@@ -430,6 +430,24 @@ fn config_game_update(game_info: &mut GameInfo) -> Option<Screen> {
 				});
 
 				ui.horizontal(|ui| {
+					let button_text = match game_info.config_info.multiplayer() {
+						false => "Singleplayer",
+						true => "Multiplayer",
+					};
+
+					if ui
+						.button(
+							RichText::new(button_text)
+								.strong()
+								.font(FontId::proportional(30.0)),
+						)
+						.clicked()
+					{
+						game_info.config_info.set_opposite_multiplayer();
+					}
+				});
+
+				ui.horizontal(|ui| {
 					ui.label(
 						RichText::new("Local Port: ")
 							.strong()
